@@ -775,6 +775,7 @@ const Store = (function(){
         defaultReminder: "09:00",
         urgencyDays: 7,
         departments: ["Verdura","Latticini","Carne","Dispensa","Igiene","Casa"],
+        repartiAlias: {},
         unitPrefs: ["g","kg","ml","L","pz","tazza","cucchiaio","cucchiaino"],
         conversioniAuto: true,
         compactHeaders: true,
@@ -1209,8 +1210,14 @@ const Reparti = (function(){
   ];
   function guess(nome){
     const n=(nome||"").toLowerCase();
-    for(const [re,rep] of DICT){ if(re.test(n)) return rep; }
-    return "Dispensa";
+    let rep="Dispensa";
+    for(const [re,r] of DICT){ if(re.test(n)){ rep=r; break; } }
+    // traduzione nei reparti scelti dall'utente (Impostazioni: AliasReparti, es. "Verdura=Ortofrutta")
+    try{
+      const st=Store.get().settings, alias=st.repartiAlias||{}, deps=st.departments||[];
+      if(alias[rep] && !deps.includes(rep)) return alias[rep];
+    }catch(e){}
+    return rep;
   }
   return { guess };
 })();
@@ -1353,7 +1360,7 @@ const Shopping = (function(){
     const favs=Store.get().settings.favorites||[];
     const present=new Set(get(weekKey).extra.map(x=>x.nome.trim().toLowerCase()));
     const add=favs.filter(f=>!present.has(f.nome.trim().toLowerCase()));
-    if(add.length) addExtra(weekKey, add.map(f=>({nome:f.nome, qty:f.qty, unita:f.unita, provenienze:[{extra:true, base:true}]})));
+    if(add.length) addExtra(weekKey, add.map(f=>({nome:f.nome, qty:f.qty, unita:f.unita, reparto:f.reparto, provenienze:[{extra:true, base:true}]})));
     return add.length;
   }
   function removeExtra(weekKey, id){ Store.update(db=>{ const b=bucket(db,weekKey); b.extra=b.extra.filter(x=>x.id!==id); }); }
@@ -1379,12 +1386,18 @@ const Shopping = (function(){
         const factor=Scale.factorFor(r, serv);
         const have=slot.have||[];
         (r.ingredienti||[]).forEach(ing=>{
-          if(ing.qty==null || ing.unita==="qb") return;
           if(have.includes(ing.nome)) return;
           if(ignore.includes(ing.nome.trim().toLowerCase())) return;
+          const prov={recipeId:r.id, recipeName:r.nome, day, slot:slotName};
+          const reparto=ing.reparto||Reparti.guess(ing.nome);
+          // "qb" e dosi da cucchiaio/cucchiaino/tazza: in lista va solo il nome (si compra la confezione)
+          if(ing.qty==null || ing.unita==="qb" || Units.SPOON.includes(String(ing.unita||"").toLowerCase())){
+            out.push({nome:ing.nome, qty:null, unita:"qb", reparto, prov}); return;
+          }
+          // pezzi: quantità non arrotondata; l'arrotondamento per eccesso avviene dopo la somma (0,5+0,5 cipolla = 1)
+          if(ing.unita==="pz"){ out.push({nome:ing.nome, qty:ing.qty*factor, unita:"pz", reparto, prov}); return; }
           const sc=Scale.ingredient(ing, factor);
-          out.push({nome:ing.nome, qty:sc.qtyScaled, unita:ing.unita, reparto:ing.reparto||Reparti.guess(ing.nome),
-            prov:{recipeId:r.id, recipeName:r.nome, day, slot:slotName}});
+          out.push({nome:ing.nome, qty:sc.qtyScaled, unita:ing.unita, reparto, prov});
         });
       });
     });
@@ -1396,6 +1409,9 @@ const Shopping = (function(){
     const b=get(weekKey);
     const raw=fromPlanner(weekKey);
     (b.extra||[]).forEach(x=>raw.push({nome:x.nome, qty:x.qty, unita:x.unita, reparto:x.reparto||Reparti.guess(x.nome), prov:{extra:true, id:x.id}, extraId:x.id}));
+    // reparti non più presenti in Impostazioni → alias (es. Verdura → Ortofrutta)
+    const stg=Store.get().settings, alias=stg.repartiAlias||{}, deps=stg.departments||[];
+    raw.forEach(it=>{ if(it.reparto && alias[it.reparto] && !deps.includes(it.reparto)) it.reparto=alias[it.reparto]; });
     const map={};
     raw.forEach(it=>{
       const dim=dimOf(it.unita);
@@ -1405,6 +1421,12 @@ const Shopping = (function(){
       if(it.qty!=null){ m.base+=toBase(it.qty, it.unita); m.hasQty=true; }
       m.provenienze.push(it.prov);
       if(it.extraId) m.extraIds.push(it.extraId);
+    });
+    // una voce senza quantità (qb) con lo stesso nome di una voce quantificata si fonde in quella
+    Object.keys(map).forEach(k=>{
+      const m=map[k]; if(m.hasQty || m.dim!=="u:qb") return;
+      const other=Object.values(map).find(o=>o!==m && o.hasQty && o.nome.trim().toLowerCase()===m.nome.trim().toLowerCase());
+      if(other){ other.provenienze.push(...m.provenienze); other.extraIds.push(...m.extraIds); delete map[k]; }
     });
     const items=Object.values(map).map(m=>({...m, ...display(m, b.unit[m.key]), have:!!b.have[m.key]}));
     const order=Store.get().settings.departments;
@@ -1421,7 +1443,7 @@ const Shopping = (function(){
       return {qty:u==="kg"?round2(m.base/1000):Math.round(m.base), unita:u, altUnits:alt}; }
     if(m.dim==="vol"){ const alt=["ml","L"]; let u=alt.includes(pref)?pref:(m.base>=1000?"L":"ml");
       return {qty:u==="L"?round2(m.base/1000):Math.round(m.base), unita:u, altUnits:alt}; }
-    if(m.dim==="count"){ return {qty:Math.round(m.base), unita:"pz", altUnits:[]}; }
+    if(m.dim==="count"){ return {qty:Math.max(1, Math.ceil(m.base-1e-6)), unita:"pz", altUnits:[]}; }
     return {qty:Math.round(m.base*10)/10, unita:m.dim.slice(2), altUnits:[]};
   }
 
@@ -1754,6 +1776,7 @@ const Parse = (function(){
         if(key==="ingredienti"){ mode="ing"; if(kv[2].trim()) pushIng(r, kv[2], errors, bi); return; }
         if(key==="istruzioni"){ mode="ist"; if(kv[2].trim()) r.istruzioni.push(kv[2].trim().replace(/^\d+[\).]\s*/,"")); return; }
         if(key==="note"){ mode="note"; r.note=kv[2].trim(); return; }
+        if(key==="fonte"){ r.fonte=kv[2].trim(); mode=null; return; }
         // riga dentro una sezione
         if(mode==="ing"){ pushIng(r, line, errors, bi); }
         else if(mode==="ist"){ r.istruzioni.push(line.replace(/^\d+[\).]\s*/,"")); }
@@ -1782,6 +1805,7 @@ const Parse = (function(){
       else if(m=tok.match(/^GIORNO:(.+)$/i)) o.giorno=m[1];
       else if(m=tok.match(/^WEEKDAY:(MON|TUE|WED|THU|FRI|SAT|SUN)$/i)) o.weekday=m[1].toUpperCase();
       else if(m=tok.match(/^([+-]\d+)$/)) o.delta=parseInt(m[1],10);
+      else if(m=tok.match(/^PASTO:(pranzo|cena|entrambi)$/i)) o.pasto=m[1].toLowerCase();
     }));
     return o;
   }
@@ -1799,6 +1823,7 @@ const Parse = (function(){
       if(o.remind) ev.remind=o.remind;
       if(o.prio) ev.prio=o.prio;
       if(o.delta!=null) ev.deltaPersone=o.delta;
+      if(o.pasto) ev.pasto=o.pasto;
       if(/^RRULE:/i.test(first)){
         const freq=(first.split(":")[1]||"").toUpperCase();
         if(!["ANNUALE","MENSILE","SETTIMANALE"].includes(freq)){ errors.push({line:i+1, raw:line, msg:"Frequenza RRULE non valida: "+freq}); return; }
@@ -1836,7 +1861,8 @@ const Parse = (function(){
   const SET_MAP={ tema:"theme", coloreaccento:"accent", scalafont:"fontScale", porzionidefault:"defaultServings",
     promemoriadefault:"defaultReminder", sogliaurgenzagiorni:"urgencyDays", escludicondimenti:"deprecateCondimenti",
     reparti:"departments", unitapreferite:"unitPrefs", conversioniauto:"conversioniAuto",
-    intestazionicompatte:"compactHeaders", notifichesistema:"notificationsEnabled", ignoraingredienti:"ignoreIngredients" };
+    intestazionicompatte:"compactHeaders", notifichesistema:"notificationsEnabled", ignoraingredienti:"ignoreIngredients",
+    aliasreparti:"repartiAlias" };
   function impostazioni(text){
     const patch={}, applied=[], errors=[];
     text.replace(/\r/g,"").split("\n").forEach((raw,i)=>{
@@ -1851,6 +1877,10 @@ const Parse = (function(){
       else if(target==="fontScale"){ parsed=parseFloat(val.replace(",",".")); if(isNaN(parsed)){ errors.push({line:i+1, raw:line, msg:"ScalaFont non numerica"}); return; } }
       else if(target==="defaultServings"||target==="urgencyDays"){ parsed=parseInt(val,10); if(isNaN(parsed)){ errors.push({line:i+1, raw:line, msg:"Valore non numerico"}); return; } }
       else if(["deprecateCondimenti","conversioniAuto","compactHeaders","notificationsEnabled"].includes(target)) parsed=/^(true|si|sì|1|on)$/i.test(val);
+      else if(target==="repartiAlias"){
+        parsed={};
+        val.split(",").forEach(pair=>{ const [a,b]=pair.split("=").map(x=>(x||"").trim()); if(a&&b) parsed[a]=b; });
+      }
       else if(["departments","unitPrefs","ignoreIngredients"].includes(target)){ parsed=val.split(",").map(x=>x.trim()).filter(Boolean); if(target==="ignoreIngredients") parsed=parsed.map(x=>x.toLowerCase()); }
       else parsed=val;
       patch[target]=parsed; applied.push({key:rawKey, value:val});
@@ -1858,7 +1888,22 @@ const Parse = (function(){
     return { patch, applied, errors };
   }
 
-  return { ricette, calendario, todo, impostazioni };
+  // ---- lista_base_spesa.txt: "## Reparto" poi una voce per riga ("- nome | 1 L", la quantità è facoltativa) ----
+  function listabase(text){
+    const items=[], errors=[]; let reparto="";
+    text.replace(/^\uFEFF/,"").replace(/\r/g,"").split("\n").forEach((raw,i)=>{
+      const line=raw.trim(); if(!line || line.startsWith("#!")) return;
+      const h=line.match(/^#{1,3}\s*(.+)$/);
+      if(h){ reparto=h[1].trim(); return; }
+      const ing=parseIngredientLine(line);
+      if(!ing){ errors.push({line:i+1, raw:line, msg:"Riga non riconosciuta"}); return; }
+      if(!reparto){ errors.push({line:i+1, raw:line, msg:"Voce prima di un titolo '## Reparto'"}); return; }
+      items.push({ nome:ing.nome, qty:ing.qty, unita:ing.unita==="qb"?"pz":ing.unita, reparto });
+    });
+    return { items, errors };
+  }
+
+  return { ricette, calendario, todo, impostazioni, listabase };
 })();
 
 /* ---------------------------------------------------------------------------
@@ -2032,6 +2077,7 @@ function renderSettings(){
           <button class="btn" data-imp="ricette">🍽️ ricette.txt</button>
           <button class="btn" data-imp="todo">✅ todo.txt</button>
           <button class="btn" data-imp="impostazioni">⚙️ impostazioni.txt</button>
+          <button class="btn" data-imp="listabase">🧺 lista_base_spesa.txt</button>
         </div>
         ${importExamplesHTML()}
       </div>
@@ -2719,6 +2765,7 @@ function openRecipeDetail(id){
     <ul class="ing-list" id="rd-ings"></ul>
     <h3 class="mt-4 mb-2">Istruzioni</h3>
     <div class="step-view" id="rd-steps"></div>
+    ${r.fonte?`<p class="text-xs text-mute mt-3">Fonte: ${/^https?:\/\//i.test(r.fonte)?`<a href="${escapeAttr(r.fonte)}" target="_blank" rel="noopener">${escapeHtml(r.fonte.replace(/^https?:\/\/(www\.)?/i,"").slice(0,60))}</a>`:escapeHtml(r.fonte)}</p>`:""}
     <div class="field mt-4"><label for="rd-note">Note</label><textarea id="rd-note" rows="2" placeholder="Aggiungi una nota…">${escapeHtml(r.note||'')}</textarea></div>`;
   const foot=`
     <button class="btn btn-ghost" data-del style="margin-right:auto" aria-label="Elimina ricetta">🗑️</button>
@@ -2901,6 +2948,7 @@ function recipeToTxt(r){
   out+=`Ingredienti:\n`+(r.ingredienti||[]).map(i=>`- ${i.nome} | ${i.qty==null?'qb':(i.qty+' '+i.unita)}`).join("\n")+"\n";
   out+=`Istruzioni:\n`+(r.istruzioni||[]).map((x,i)=>`${i+1}) ${x}`).join("\n");
   if(r.note) out+=`\nNote: ${r.note}`;
+  if(r.fonte) out+=`\nFonte: ${r.fonte}`;
   return out;
 }
 function openExportRecipes(){
@@ -2917,11 +2965,23 @@ function openExportRecipes(){
 function openImportRecipes(){
   Modal.open({ title:"Importa ricette", bodyHTML:`
     <p class="text-sm text-mute mb-3">Carica <code>.txt</code> (formato ricette) o <code>.json</code> (solo ricette). Le nuove ricette vengono <strong>aggiunte</strong> a quelle esistenti.</p>
-    <div class="flex gap-2 flex-wrap"><button class="btn" data-txt>📄 Da .txt</button><button class="btn" data-json>🗂️ Da .json</button></div>
+    <div class="flex gap-2 flex-wrap"><button class="btn" data-txt>📄 Da .txt</button><button class="btn" data-json>🗂️ Da .json</button><button class="btn" data-paste>📋 Incolla testo</button></div>
+    <div id="imp-paste" class="mt-3" hidden>
+      <div class="field"><label for="imp-paste-txt">Incolla qui il testo nel formato ricette (anche più ricette separate da ---)</label>
+      <textarea id="imp-paste-txt" rows="8" placeholder="Nome: …&#10;PorzioniBase: 2&#10;Ingredienti:&#10;- …"></textarea></div>
+      <button class="btn btn-primary" data-paste-read>Leggi il testo</button>
+    </div>
     <div id="imp-preview" class="mt-3"></div>`,
     footHTML:`<button class="btn" data-close>Chiudi</button>`,
     onMount(dialog, close){
       const prev=dialog.querySelector("#imp-preview");
+      const pasteBox=dialog.querySelector("#imp-paste");
+      dialog.querySelector("[data-paste]").addEventListener("click",()=>{ pasteBox.hidden=!pasteBox.hidden; if(!pasteBox.hidden) dialog.querySelector("#imp-paste-txt").focus(); });
+      dialog.querySelector("[data-paste-read]").addEventListener("click",()=>{
+        const txt=dialog.querySelector("#imp-paste-txt").value;
+        if(!txt.trim()){ Toast.show("Incolla prima il testo della ricetta","warn"); return; }
+        const {recipes,errors}=Parse.ricette(txt); showRecipeImportPreview(prev, recipes, errors, close);
+      });
       dialog.querySelector("[data-txt]").addEventListener("click",()=>pickFile(".txt,text/plain",(txt)=>{
         const {recipes,errors}=Parse.ricette(txt); showRecipeImportPreview(prev, recipes, errors, close);
       }));
@@ -3096,7 +3156,7 @@ function mountShoppingList(container, weekKey, opts){
         <div class="si-name truncate" title="${escapeAttr(it.nome)}">${escapeHtml(it.nome)}</div>
         <div class="si-badge">${multi?`<button data-prov>${escapeHtml(prov)} ⓘ</button>`:escapeHtml(prov)}</div>
       </div>
-      ${it.hasQty?`<span class="si-qty">${Shopping.fmtQty(it.qty)} ${it.unita}</span>`:'<span class="si-qty text-mute">qb</span>'}
+      ${it.hasQty?`<span class="si-qty">${Shopping.fmtQty(it.qty)} ${it.unita}</span>`:''}
       ${(it.altUnits&&it.altUnits.length>1)?`<button class="si-unit-toggle" data-toggle title="Cambia unità (${it.altUnits.join('↔')})" aria-label="Cambia unità">⇄</button>`:''}
       ${(it.extraIds&&it.extraIds.length)?`<button class="btn btn-ghost si-del" data-del aria-label="Rimuovi ${escapeAttr(it.nome)}">✕</button>`:''}`;
     row.querySelector(".si-check").addEventListener("change",e=>{ Shopping.setHave(weekKey, it.key, e.target.checked); draw(); });
@@ -3184,7 +3244,7 @@ function renderShopping(){
       </div>
       <div class="fav-row">
         <span class="text-xs text-mute" style="align-self:center">Lista base:</span>
-        ${(s.favorites||[]).map((f,i)=>`<button class="chip fav-chip" data-fav="${i}">${escapeHtml(f.nome)} <span class="text-mute">${Shopping.fmtQty(f.qty)} ${f.unita}</span></button>`).join("")}
+        ${(s.favorites||[]).map((f,i)=>`<button class="chip fav-chip" data-fav="${i}">${escapeHtml(f.nome)} ${f.qty!=null?`<span class="text-mute">${Shopping.fmtQty(f.qty)} ${f.unita}</span>`:""}</button>`).join("")}
       </div>
     </div>
 
@@ -3234,7 +3294,7 @@ function openProvPopover(anchor, it){
 /* Stampa lista (layout A4 per reparti) */
 function printShopping(weekKey){
   const {groups, orderedReps}=Shopping.aggregate(weekKey);
-  const inner=orderedReps.map(rep=>`<div class="p-day"><h3>${escapeHtml(rep)}</h3><table><tbody>${groups[rep].map(it=>`<tr><td>☐ ${escapeHtml(it.nome)}</td><td style="text-align:right">${it.hasQty?escapeHtml(Shopping.fmtQty(it.qty)+" "+it.unita):"qb"}</td></tr>`).join("")}</tbody></table></div>`).join("");
+  const inner=orderedReps.map(rep=>`<div class="p-day"><h3>${escapeHtml(rep)}</h3><table><tbody>${groups[rep].map(it=>`<tr><td>☐ ${escapeHtml(it.nome)}</td><td style="text-align:right">${it.hasQty?escapeHtml(Shopping.fmtQty(it.qty)+" "+it.unita):""}</td></tr>`).join("")}</tbody></table></div>`).join("");
   printHTML(`Lista spesa · settimana ${weekKey.split("-")[1]}`, inner||"<p>Lista vuota</p>");
 }
 /* Export .txt / .csv */
@@ -3560,6 +3620,7 @@ function runTxtImport(kind){
     if(kind==="calendario") res=Parse.calendario(txt);
     else if(kind==="ricette") res=Parse.ricette(txt);
     else if(kind==="todo") res=Parse.todo(txt);
+    else if(kind==="listabase") res=Parse.listabase(txt);
     else res=Parse.impostazioni(txt);
     openImportPreview(kind, res);
   });
@@ -3581,6 +3642,9 @@ function openImportPreview(kind, res){
   } else if(kind==="todo"){
     count=res.todos.length;
     itemsHtml=res.todos.map((t,i)=>rowChk(i, escapeHtml(t.titolo), t.data||"")).join("");
+  } else if(kind==="listabase"){
+    count=res.items.length;
+    itemsHtml=res.items.map((it,i)=>rowChk(i, escapeHtml(it.nome), `${it.reparto}${it.qty!=null?` · ${Shopping.fmtQty(it.qty)} ${it.unita}`:""}`)).join("");
   } else {
     count=res.applied.length;
     itemsHtml=res.applied.map(a=>`<li><span>${escapeHtml(a.key)}</span><span class="text-mute">${escapeHtml(a.value)}</span></li>`).join("");
@@ -3613,6 +3677,22 @@ function applyImport(kind, res, inc){
   } else if(kind==="todo"){
     let n=0; res.todos.forEach((t,i)=>{ if(inc(i)){ Todos.add(t); n++; } });
     Toast.show(`${n} to-do importati`,"ok");
+  } else if(kind==="listabase"){
+    let n=0;
+    Store.update(db=>{
+      const favs=db.settings.favorites=db.settings.favorites||[];
+      const deps=db.settings.departments=db.settings.departments||[];
+      res.items.forEach((it,i)=>{
+        if(!inc(i)) return;
+        const k=it.nome.trim().toLowerCase();
+        const idx=favs.findIndex(f=>f.nome.trim().toLowerCase()===k);
+        const rec={nome:it.nome, qty:(it.qty!=null?it.qty:null), unita:it.unita||"pz", reparto:it.reparto};
+        if(idx>=0) favs[idx]=rec; else favs.push(rec);
+        if(it.reparto && !deps.includes(it.reparto)) deps.push(it.reparto);
+        n++;
+      });
+    });
+    Toast.show(`${n} voci della lista base importate`,"ok");
   } else {
     Store.update(db=>Object.assign(db.settings, res.patch)); Theme.apply();
     Toast.show(`${res.applied.length} impostazioni applicate`,"ok");
@@ -3627,8 +3707,8 @@ function importExamplesHTML(){
 RRULE:ANNUALE | COMPLEANNO | Giulia | Torta al cioccolato | GIORNO:12-06
 RRULE:ANNUALE | ANNIVERSARIO | Noi due | Cena fuori | GIORNO:08-14
 RRULE:MENSILE | SCADENZA | Affitto | Bonifico | GIORNO:05; REMIND:08:30
-RRULE:SETTIMANALE | OSPITI | Pranzo nonni | Ogni domenica | WEEKDAY:SUN; +2
-RRULE:SETTIMANALE | ASSENZA | Partner fuori | | WEEKDAY:THU; -1`;
+RRULE:SETTIMANALE | OSPITI | Pranzo nonni | Ogni domenica | WEEKDAY:SUN; +2; PASTO:pranzo
+RRULE:SETTIMANALE | ASSENZA | Partner fuori | | WEEKDAY:THU; -1; PASTO:cena`;
   const ric=`Nome: Pasta al pomodoro
 PorzioniBase: 2
 Tempo: 25 min
@@ -3674,6 +3754,16 @@ ConversioniAuto: true
 IntestazioniCompatte: true
 NotificheSistema: false
 IgnoraIngredienti: sale, pepe, olio, acqua`;
+  const lb=`## Latticini
+- Latte | 1 L
+- Yogurt | 4 pz
+## Dispensa
+- Pane
+- Caffè | 250 g
+## Igiene
+- Carta igienica
+## Casa
+- Detersivo piatti`;
   const blk=(t,c)=>`<div class="mt-2"><div class="text-xs font-semi mb-1">${t}</div><code class="block">${escapeHtml(c)}</code></div>`;
   return `<details class="mt-3">
     <summary style="cursor:pointer;font-weight:600;font-size:var(--fs-sm)">📄 Esempi di file da importare</summary>
@@ -3681,6 +3771,7 @@ IgnoraIngredienti: sale, pepe, olio, acqua`;
     ${blk("ricette.txt", ric)}
     ${blk("todo.txt", td)}
     ${blk("impostazioni.txt", imp)}
+    ${blk("lista_base_spesa.txt", lb)}
   </details>`;
 }
 
@@ -3930,7 +4021,7 @@ function boot(){
   if(Store.get().settings.sync && Store.get().settings.sync.enabled) setTimeout(()=>Sync.startAuto(), 400);
 }
 
-return { boot, Store, Toast, Modal, Router, Theme, Demo,
+return { boot, Store, Toast, Modal, Router, Theme, Demo, applyImport,
   Parse, Backup, Sync, Shopping, Recipes, Events, Todos, Calendar, DateUtils, Plan };
 })();
 
