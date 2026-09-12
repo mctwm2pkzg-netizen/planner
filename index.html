@@ -744,6 +744,10 @@ code.block{ border-radius:12px; }
   .shop-item.shop-mode{ min-height:60px; }
   .hdr-week .btn{ min-height:38px; padding:0 10px; } .hdr-week .btn-icon{ min-width:38px; }
 }
+
+.wk-weekend{ flex:none; }
+.wk-weekend.is-on{ background:var(--accent-soft); color:var(--accent-strong); border-color:transparent; }
+:root[data-theme="dark"] .wk-weekend.is-on{ color:var(--text); }
 </style>
 </head>
 <body>
@@ -809,7 +813,7 @@ const App = (function(){
 --------------------------------------------------------------------------- */
 const Store = (function(){
   const KEY = "planner-weekly-db";
-  const SCHEMA_VERSION = 3;
+  const SCHEMA_VERSION = 4;
 
   // Stato di default (modello dati indicativo del prompt)
   function defaults(){
@@ -821,7 +825,7 @@ const Store = (function(){
         accent: "teal",
         fontScale: 1.0,
         defaultServings: 2,
-        weekDays: 7,
+        weekDays: 5,
         plannerLayout: "griglia",
         defaultReminder: "09:00",
         urgencyDays: 7,
@@ -885,6 +889,8 @@ const Store = (function(){
       }
       db.version=3;
     }
+    // v3 -> v4: il planner parte a 5 giorni (lun–ven); il weekend si aggiunge con il pulsante
+    if(db.version < 4){ if(db.settings) db.settings.weekDays=5; db.version=4; }
     db.version = SCHEMA_VERSION;
     return db;
   }
@@ -2153,8 +2159,8 @@ function renderSettings(){
       <div class="set-group">
         <h3>Planner</h3>
         <div class="set-row">
-          <div class="set-label"><label for="set-weekdays" class="mb-0">Giorni della settimana</label><small>5 (lun–ven) oppure 7 (lun–dom)</small></div>
-          <select id="set-weekdays" style="width:auto"><option value="7" ${s.weekDays!==5?'selected':''}>7 giorni</option><option value="5" ${s.weekDays===5?'selected':''}>5 giorni</option></select>
+          <div class="set-label"><label for="set-weekdays" class="mb-0">Giorni della settimana</label><small>5 (lun–ven) oppure 7 (lun–dom). Si cambia al volo anche con il pulsante “Weekend” nel Planner.</small></div>
+          <select id="set-weekdays" style="width:auto"><option value="5" ${s.weekDays!==7?'selected':''}>5 giorni</option><option value="7" ${s.weekDays===7?'selected':''}>7 giorni</option></select>
         </div>
         <div class="set-row">
           <div class="set-label"><label for="set-layout" class="mb-0">Disposizione</label><small>Griglia: settimana a colonne. Affiancato: giorni a righe con la lista spesa accanto.</small></div>
@@ -2241,7 +2247,7 @@ function renderSettings(){
         </div>
         <div class="field"><label for="sync-url">Supabase Project URL</label><input id="sync-url" type="text" inputmode="url" placeholder="https://xxxxx.supabase.co" value="${escapeAttr((s.sync&&s.sync.url)||'')}"></div>
         <div class="field"><label for="sync-key">Supabase anon key</label><input id="sync-key" type="text" placeholder="eyJhbGciOi…" value="${escapeAttr((s.sync&&s.sync.anonKey)||'')}"></div>
-        <div class="field"><label for="sync-code">Codice di sincronizzazione (uguale su ogni dispositivo)</label><input id="sync-code" type="text" placeholder="es. casa-scomparin-2026" value="${escapeAttr((s.sync&&s.sync.code)||'')}"></div>
+        <div class="field"><label for="sync-code">Codice di sincronizzazione (uguale su ogni dispositivo)</label><input id="sync-code" type="text" placeholder="es. una-frase-che-ricordi-2026" value="${escapeAttr((s.sync&&s.sync.code)||'')}"></div>
         <div class="flex gap-2 flex-wrap">
           <button class="btn" id="sync-test" type="button">Verifica connessione</button>
           <button class="btn" id="sync-now" type="button">Sincronizza ora</button>
@@ -2302,7 +2308,7 @@ create policy "anon full access" on sync_store
   el.querySelector("#set-servings").addEventListener("change", e=>setSetting("defaultServings", clampInt(e.target.value,1,20,2)));
   el.querySelector("#set-reminder").addEventListener("change", e=>setSetting("defaultReminder", e.target.value||"09:00"));
   el.querySelector("#set-urgency").addEventListener("change", e=>setSetting("urgencyDays", clampInt(e.target.value,1,60,7)));
-  el.querySelector("#set-weekdays").addEventListener("change", e=>{ setSetting("weekDays", e.target.value==="5"?5:7); Toast.show("Planner: "+(e.target.value==="5"?"5":"7")+" giorni","ok"); });
+  el.querySelector("#set-weekdays").addEventListener("change", e=>{ setSetting("weekDays", e.target.value==="7"?7:5); Toast.show("Planner: "+(e.target.value==="5"?"5":"7")+" giorni","ok"); });
   el.querySelector("#set-layout").addEventListener("change", e=>{ setSetting("plannerLayout", e.target.value==="affiancato"?"affiancato":"griglia"); Toast.show("Disposizione aggiornata","ok"); });
 
   // ---- conversioni / ignora / notifiche ----
@@ -2432,7 +2438,7 @@ function isPhone(){ return window.matchMedia && window.matchMedia("(max-width: 7
 /* ---- giorni visibili della settimana (5 o 7, da Impostazioni) ---- */
 const DAY_NAMES=["Lun","Mar","Mer","Gio","Ven","Sab","Dom"];
 function dayName(d){ return DAY_NAMES[(d.getDay()+6)%7]; }
-function plannerDays(monday){ const n=(Store.get().settings.weekDays===5)?5:7; return Array.from({length:n},(_,i)=>DateUtils.addDays(monday,i)); }
+function plannerDays(monday){ const n=(Store.get().settings.weekDays===7)?7:5; return Array.from({length:n},(_,i)=>DateUtils.addDays(monday,i)); }
 
 /* ---- barra settimana nell'header (usata da Planner e Spesa) ---- */
 function mountWeekNav(route){
@@ -2595,6 +2601,7 @@ function renderPlanner(){
   const tp=Plan.peopleFor(twk, todayStr, s.defaultServings, "pranzo"), tc=Plan.peopleFor(twk, todayStr, s.defaultServings, "cena");
   head.innerHTML=`
     <span class="chip chip-accent tk-today" title="Oggi ${DateUtils.fmtLong(DateUtils.today())} · persone a pranzo e a cena (base ${s.defaultServings})">👥 Oggi ${tp} · ${tc}</span>
+    <button class="btn btn-sm wk-weekend${days.length===7?" is-on":""}" id="wk-weekend" aria-pressed="${days.length===7?"true":"false"}" title="${days.length===7?"Nascondi sabato e domenica":"Mostra anche sabato e domenica"}">${days.length===7?"📅 Weekend ✓":"📅 Weekend"}</button>
     <div class="tk-slot"></div>
     <div class="flex gap-2 items-center" style="flex:none">
       ${phone?"":`<button class="btn btn-sm" id="wk-layout" title="Cambia disposizione (anche in Impostazioni)">⇄ ${layout==="griglia"?"Affianca la spesa":"Griglia a colonne"}</button>
@@ -2671,6 +2678,7 @@ function renderPlanner(){
     el.appendChild(split);
   }
 
+  head.querySelector("#wk-weekend").addEventListener("click",()=>{ setSetting("weekDays", days.length===7?5:7); Router.go("planner"); });
   const lb=head.querySelector("#wk-layout"); if(lb) lb.addEventListener("click",()=>{ setSetting("plannerLayout", layout==="griglia"?"affiancato":"griglia"); Router.go("planner"); });
   const pb=head.querySelector("#wk-print"); if(pb) pb.addEventListener("click",()=>printWeek(weekKey, monday, days));
   const sh=head.querySelector("#wk-shop"); if(sh) sh.addEventListener("click",()=>Router.go("spesa"));
