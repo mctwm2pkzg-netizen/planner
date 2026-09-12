@@ -693,6 +693,57 @@ code.block{ border-radius:12px; }
 .imp-cell:not(.compact) .imp-row .imp-dot{ margin-top:6px; }
 .imp-cell:not(.compact) .imp-row .imp-title{ white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; flex:1 1 60%; }
 .imp-cell:not(.compact) .imp-row .chip{ margin-left:13px; }
+
+/* --- liste spesa esplicite, modalità supermercato, tastino carrello --- */
+.m-cart{ position:absolute; left:6px; bottom:6px; min-height:28px; min-width:36px; padding:2px 8px; border-radius:999px; font-family:inherit;
+  font-size:var(--fs-xs); font-weight:700; color:var(--text-soft); background:var(--surface-2); border:1px solid var(--border); cursor:pointer; }
+.m-cart:hover{ border-color:var(--accent); color:var(--text); }
+.m-cart.in{ background:var(--accent-soft); color:var(--accent-strong); border-color:transparent; }
+:root[data-theme="dark"] .m-cart.in{ color:var(--text); }
+.meal-wrap.compact .meal-cell{ padding-right:104px; }
+.meal-wrap.compact .m-cart{ left:auto; right:50px; bottom:auto; top:50%; transform:translateY(-50%); }
+.shop-banner{ background:var(--accent-soft); color:var(--accent-strong); border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:var(--sp-3); font-size:var(--fs-sm); }
+.shop-banner.small{ padding:6px 10px; font-size:var(--fs-xs); margin-bottom:0; }
+:root[data-theme="dark"] .shop-banner{ color:var(--text); }
+.shop-item.shop-mode{ min-height:56px; padding:10px 12px; cursor:pointer; user-select:none; -webkit-user-select:none; }
+.shop-item.shop-mode .si-check{ width:28px; height:28px; }
+.shop-item.shop-mode .si-name{ font-size:var(--fs-base); }
+.shop-item.shop-mode .si-qty{ font-size:var(--fs-base); font-weight:600; }
+.shop-item.shop-mode.compact{ min-height:44px; padding:6px 8px; }
+.shop-item.shop-mode.compact .si-name, .shop-item.shop-mode.compact .si-qty{ font-size:var(--fs-sm); }
+.rep-head.sticky{ position:sticky; top:0; background:var(--bg); z-index:2; padding:6px 0; }
+.shop-panel .rep-head.sticky{ background:var(--surface); }
+.sp-empty{ text-align:center; padding:var(--sp-6) var(--sp-4); }
+.sp-empty .big{ font-size:44px; margin-bottom:var(--sp-2); }
+.sp-add-compact{ padding:var(--sp-3); }
+.sp-archive summary{ cursor:pointer; font-weight:600; font-size:var(--fs-sm); color:var(--text-soft); }
+.base-check{ max-height:min(60dvh, 520px); overflow:auto; border:1px solid var(--border); border-radius:var(--radius-sm); padding:4px 10px; }
+.base-check .rep-head.sticky{ background:var(--surface); }
+.bc-row{ display:flex; align-items:center; gap:10px; min-height:44px; border-bottom:1px solid var(--border); cursor:pointer; font-size:var(--fs-sm); }
+.bc-row:last-child{ border-bottom:none; }
+.bc-row input{ width:24px; height:24px; min-height:auto; flex:none; }
+.bc-row .bc-name{ flex:1; font-weight:600; }
+.bc-row.locked{ opacity:.75; cursor:default; }
+
+/* --- telefono: agenda verticale --- */
+.agenda{ display:flex; flex-direction:column; gap:10px; }
+.agenda-day{ display:grid; grid-template-columns:54px minmax(0,1fr); gap:8px; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px; }
+.agenda-day.is-today{ border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent); background:var(--accent-soft); }
+.agenda-day.is-today .d-num{ color:var(--accent-strong); }
+.ag-date{ display:flex; flex-direction:column; align-items:flex-start; gap:4px; position:relative; }
+.ag-date .d-wd{ font-size:12px; font-weight:600; color:var(--text-soft); text-transform:uppercase; letter-spacing:.04em; }
+.ag-date .d-num{ font-size:var(--fs-2xl); font-weight:700; line-height:1; }
+.ag-date .chip{ padding:1px 7px; font-size:11px; }
+.ag-date .d-menu-btn{ border:none; background:transparent; color:var(--text-mute); cursor:pointer; font-size:16px; padding:2px 4px; border-radius:6px; margin-top:auto; }
+.ag-body{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+.ag-body .meal-wrap.compact .meal-cell{ min-height:52px; }
+@media(max-width:700px){
+  .planner-head{ gap:8px; }
+  .planner-head .tk-today{ order:1; } .planner-head > .flex{ order:2; margin-left:auto; }
+  .view-head h1{ font-size:var(--fs-xl); }
+  .shop-item.shop-mode{ min-height:60px; }
+  .hdr-week .btn{ min-height:38px; padding:0 10px; } .hdr-week .btn-icon{ min-width:38px; }
+}
 </style>
 </head>
 <body>
@@ -758,7 +809,7 @@ const App = (function(){
 --------------------------------------------------------------------------- */
 const Store = (function(){
   const KEY = "planner-weekly-db";
-  const SCHEMA_VERSION = 2;
+  const SCHEMA_VERSION = 3;
 
   // Stato di default (modello dati indicativo del prompt)
   function defaults(){
@@ -795,6 +846,7 @@ const Store = (function(){
       calendarEvents: [],
       planByWeek: {},
       shoppingByWeek: {},
+      shoppingLists: [],
       todos: [],
       syncMeta: { rev:0, lastPulledRev:-1, lastHash:"", lastAt:null },
       createdAt: new Date().toISOString()
@@ -820,6 +872,18 @@ const Store = (function(){
         });
       });
       db.version=2;
+    }
+    // v2 -> v3: liste della spesa esplicite (Nuova lista / Chiudi / Spesa fatta) al posto della lista derivata
+    if(db.version < 3){
+      db.shoppingLists = db.shoppingLists || [];
+      const wks=Object.keys(db.shoppingByWeek||{}).sort();
+      const last=wks.length ? db.shoppingByWeek[wks[wks.length-1]] : null;
+      if(last && (last.extra||[]).length && !db.shoppingLists.length){
+        db.shoppingLists.push({ id:"l-mig", name:"Spesa (voci recuperate)", createdAt:new Date().toISOString(), closedAt:null, doneAt:null, status:"open", unit:{},
+          items:last.extra.map(x=>({ id:"i-"+Math.random().toString(36).slice(2,8), nome:x.nome, unita:(x.qty==null?"qb":x.unita), reparto:x.reparto, done:false,
+            sources:[{kind:"manual", qtyBase:(x.qty==null?null:((x.unita==="kg"||x.unita==="L")?x.qty*1000:x.qty))}] })) });
+      }
+      db.version=3;
     }
     db.version = SCHEMA_VERSION;
     return db;
@@ -1039,7 +1103,7 @@ const Demo = (function(){
     });
   }
   function clear(){
-    Store.update(db=>{ db.recipes=[]; db.calendarEvents=[]; db.todos=[]; db.planByWeek={}; db.shoppingByWeek={}; });
+    Store.update(db=>{ db.recipes=[]; db.calendarEvents=[]; db.todos=[]; db.planByWeek={}; db.shoppingByWeek={}; db.shoppingLists=[]; });
   }
   function isLoaded(){ return Store.get().recipes.some(r=>r.id==="r-pasta-pom"); }
   return { load, clear, isLoaded };
@@ -1340,134 +1404,183 @@ const Plan = (function(){
    (L'aggregazione dai pasti del planner verrà implementata nella fase Spesa.)
 --------------------------------------------------------------------------- */
 const Shopping = (function(){
-  function bucket(db, weekKey){
-    db.shoppingByWeek = db.shoppingByWeek || {};
-    if(!db.shoppingByWeek[weekKey]) db.shoppingByWeek[weekKey] = { extra:[], have:{}, unit:{} };
-    const b=db.shoppingByWeek[weekKey];
-    b.extra=b.extra||[]; b.have=b.have||{}; b.unit=b.unit||{};
-    return b;
-  }
-  function get(weekKey){ const db=Store.get(); const b=db.shoppingByWeek&&db.shoppingByWeek[weekKey]; return b?{extra:b.extra||[],have:b.have||{},unit:b.unit||{}}:{extra:[],have:{},unit:{}}; }
-  function addExtra(weekKey, items){
-    Store.update(db=>{ const b=bucket(db, weekKey);
-      items.forEach(it=>b.extra.push({ id:"x-"+Math.random().toString(36).slice(2,8),
-        nome:it.nome, qty:(it.qty!=null?it.qty:null), unita:it.unita||"pz",
-        reparto:it.reparto||Reparti.guess(it.nome), provenienze:it.provenienze||[{extra:true}] }));
+  /* Liste esplicite. Stati: "open" (si riempie) → "shopping" (al supermercato, si spunta) → "done" (archiviata).
+     Al massimo una lista attiva (open o shopping). Ogni voce ha delle "sources": da quale pasto/ricetta,
+     dalla lista base o aggiunta a mano; la quantità è la somma delle sorgenti con quantità. */
+  const norm=n=>String(n||"").trim().toLowerCase();
+  const rnd=p=>p+Math.random().toString(36).slice(2,8);
+  function lists(){ return Store.get().shoppingLists||[]; }
+  function active(){ return lists().find(l=>l.status==="open"||l.status==="shopping")||null; }
+  function byId(id){ return lists().find(l=>l.id===id)||null; }
+  function create(){
+    const ex=active(); if(ex) return ex;
+    let created=null;
+    Store.update(db=>{
+      db.shoppingLists=db.shoppingLists||[];
+      created={ id:rnd("l-"), name:"Spesa del "+DateUtils.fmtShort(DateUtils.today()), createdAt:new Date().toISOString(),
+        closedAt:null, doneAt:null, status:"open", items:[], unit:{} };
+      db.shoppingLists.unshift(created);
     });
+    return created;
   }
-  // Lista base: aggiunge i "preferiti" (cose che si comprano sempre) non ancora presenti tra gli extra
-  function addStaples(weekKey){
-    const favs=Store.get().settings.favorites||[];
-    const present=new Set(get(weekKey).extra.map(x=>x.nome.trim().toLowerCase()));
-    const add=favs.filter(f=>!present.has(f.nome.trim().toLowerCase()));
-    if(add.length) addExtra(weekKey, add.map(f=>({nome:f.nome, qty:f.qty, unita:f.unita, reparto:f.reparto, provenienze:[{extra:true, base:true}]})));
-    return add.length;
+  function ensure(){ return active()||create(); }
+  function setStatus(id, status){
+    Store.update(db=>{ const l=(db.shoppingLists||[]).find(x=>x.id===id); if(!l) return;
+      l.status=status;
+      if(status==="shopping") l.closedAt=new Date().toISOString();
+      if(status==="done") l.doneAt=new Date().toISOString();
+      if(status==="open"){ l.closedAt=null; l.doneAt=null; } });
   }
-  function removeExtra(weekKey, id){ Store.update(db=>{ const b=bucket(db,weekKey); b.extra=b.extra.filter(x=>x.id!==id); }); }
-  function setHave(weekKey, key, val){ Store.update(db=>{ const b=bucket(db,weekKey); if(val) b.have[key]=true; else delete b.have[key]; }); }
-  function setUnitPref(weekKey, key, unit){ Store.update(db=>{ const b=bucket(db,weekKey); if(unit) b.unit[key]=unit; else delete b.unit[key]; }); }
+  function remove(id){ Store.update(db=>{ db.shoppingLists=(db.shoppingLists||[]).filter(x=>x.id!==id); }); }
+  function rename(id, name){ Store.update(db=>{ const l=(db.shoppingLists||[]).find(x=>x.id===id); if(l && name.trim()) l.name=name.trim(); }); }
 
-  // Dimensione fisica di un'unità: mass|vol|count|u:<altro>
-  function dimOf(u){ if(u==="g"||u==="kg") return "mass"; if(u==="ml"||u==="L") return "vol"; if(u==="pz") return "count"; return "u:"+u; }
-  function toBase(qty,u){ return (u==="kg"||u==="L") ? qty*1000 : qty; }   // base = g / ml / pz / <altro>
+  // ---- unità e reparti ----
+  function dimOf(u){ if(u==="g"||u==="kg") return "mass"; if(u==="ml"||u==="L") return "vol"; if(u==="pz") return "count"; if(!u||u==="qb") return "qb"; return "u:"+u; }
+  function toBase(qty,u){ return (u==="kg"||u==="L") ? qty*1000 : qty; }
   function round2(n){ return Math.round(n*100)/100; }
   function fmtQty(q){ return Number.isInteger(q)?q:String(q).replace(".",","); }
+  function applyAlias(rep){ try{ const st=Store.get().settings, alias=st.repartiAlias||{}, deps=st.departments||[]; return (rep && alias[rep] && !deps.includes(rep))?alias[rep]:rep; }catch(e){ return rep; } }
+  // "qb", spezie e dosi da cucchiaio: in lista va solo il nome
+  function isNoQty(qty, unita){ return qty==null || unita==="qb" || Units.SPOON.includes(String(unita||"").toLowerCase()); }
 
-  // Raccoglie le voci grezze dai pasti del planner (esclude "Ce l'ho", qb, ignorati)
-  function fromPlanner(weekKey){
-    const db=Store.get(), s=db.settings, out=[];
-    const week=db.planByWeek[weekKey]||{};
-    const ignore=(s.ignoreIngredients||[]).map(x=>x.toLowerCase());
-    Object.keys(week).forEach(day=>{
-      ["pranzo","cena"].forEach(slotName=>{
-        const slot=week[day] && week[day][slotName]; if(!slot||!slot.recipeId) return;
-        const r=Recipes.byId(slot.recipeId); if(!r) return;
-        const serv=Plan.peopleFor(weekKey, day, s.defaultServings, slotName);
-        const factor=Scale.factorFor(r, serv);
-        const have=slot.have||[];
-        (r.ingredienti||[]).forEach(ing=>{
-          if(have.includes(ing.nome)) return;
-          if(ignore.includes(ing.nome.trim().toLowerCase())) return;
-          const prov={recipeId:r.id, recipeName:r.nome, day, slot:slotName};
-          const reparto=ing.reparto||Reparti.guess(ing.nome);
-          // "qb" e dosi da cucchiaio/cucchiaino/tazza: in lista va solo il nome (si compra la confezione)
-          if(ing.qty==null || ing.unita==="qb" || Units.SPOON.includes(String(ing.unita||"").toLowerCase())){
-            out.push({nome:ing.nome, qty:null, unita:"qb", reparto, prov}); return;
-          }
-          // pezzi: quantità non arrotondata; l'arrotondamento per eccesso avviene dopo la somma (0,5+0,5 cipolla = 1)
-          if(ing.unita==="pz"){ out.push({nome:ing.nome, qty:ing.qty*factor, unita:"pz", reparto, prov}); return; }
-          const sc=Scale.ingredient(ing, factor);
-          out.push({nome:ing.nome, qty:sc.qtyScaled, unita:ing.unita, reparto, prov});
-        });
+  // ---- voci ----
+  // entries: [{nome, qty, unita, reparto, source:{kind:"recipe"|"base"|"manual", ...}}]
+  function addRaw(listId, entries){
+    Store.update(db=>{
+      const l=(db.shoppingLists||[]).find(x=>x.id===listId); if(!l) return;
+      entries.forEach(e=>{
+        const k=norm(e.nome); if(!k) return;
+        const noQty=isNoQty(e.qty, e.unita);
+        const unita=noQty?"qb":e.unita; const dim=dimOf(unita);
+        const qtyBase=noQty?null:toBase(e.qty, unita);
+        let it=l.items.find(x=>norm(x.nome)===k && dimOf(x.unita)===dim);
+        if(!it && noQty) it=l.items.find(x=>norm(x.nome)===k);                       // senza quantità: si fonde con l'omonima
+        if(!it && !noQty){ const qb=l.items.find(x=>norm(x.nome)===k && dimOf(x.unita)==="qb"); if(qb){ qb.unita=unita; it=qb; } }
+        if(!it){ it={ id:rnd("i-"), nome:String(e.nome).trim(), unita, reparto:e.reparto||Reparti.guess(e.nome), done:false, sources:[] }; l.items.push(it); }
+        it.sources.push({ ...(e.source||{kind:"manual"}), qtyBase, at:new Date().toISOString() });
+        it.done=false;
       });
     });
+  }
+  function removeSources(listId, pred){
+    Store.update(db=>{ const l=(db.shoppingLists||[]).find(x=>x.id===listId); if(!l) return;
+      l.items.forEach(it=>{ it.sources=(it.sources||[]).filter(s=>!pred(s)); });
+      l.items=l.items.filter(it=>it.sources.length); });
+  }
+  function removeItem(listId, itemId){ Store.update(db=>{ const l=(db.shoppingLists||[]).find(x=>x.id===listId); if(l) l.items=l.items.filter(i=>i.id!==itemId); }); }
+  function setDone(listId, itemId, val){ Store.update(db=>{ const l=(db.shoppingLists||[]).find(x=>x.id===listId); const it=l&&l.items.find(i=>i.id===itemId); if(it) it.done=!!val; }); }
+  function setUnitPref(listId, itemId, unit){ Store.update(db=>{ const l=(db.shoppingLists||[]).find(x=>x.id===listId); if(!l) return; l.unit=l.unit||{}; if(unit) l.unit[itemId]=unit; else delete l.unit[itemId]; }); }
+
+  // ---- dal planner: ingredienti di un pasto (scalati alle persone del pasto; esclusi "Ce l'ho" e ignorati) ----
+  function mealEntries(weekKey, ds, which){
+    const s=Store.get().settings; const slot=Plan.slot(weekKey, ds, which); if(!slot||!slot.recipeId) return [];
+    const r=Recipes.byId(slot.recipeId); if(!r) return [];
+    const serv=Plan.peopleFor(weekKey, ds, s.defaultServings, which);
+    const factor=Scale.factorFor(r, serv);
+    const have=slot.have||[]; const ignore=(s.ignoreIngredients||[]).map(x=>x.toLowerCase());
+    const out=[];
+    (r.ingredienti||[]).forEach(ing=>{
+      if(have.includes(ing.nome)) return;
+      if(ignore.includes(norm(ing.nome))) return;
+      const source={kind:"recipe", recipeId:r.id, recipeName:r.nome, day:ds, slot:which};
+      const reparto=ing.reparto||Reparti.guess(ing.nome);
+      if(isNoQty(ing.qty, ing.unita)){ out.push({nome:ing.nome, qty:null, unita:"qb", reparto, source}); return; }
+      if(ing.unita==="pz"){ out.push({nome:ing.nome, qty:ing.qty*factor, unita:"pz", reparto, source}); return; }   // arrotondato dopo la somma
+      const sc=Scale.ingredient(ing, factor);
+      out.push({nome:ing.nome, qty:sc.qtyScaled, unita:ing.unita, reparto, source});
+    });
     return out;
   }
+  function addMeal(weekKey, ds, which){
+    const l=ensure();
+    removeSources(l.id, s=>s.kind==="recipe" && s.day===ds && s.slot===which);   // idempotente: ri-aggiungere aggiorna
+    const entries=mealEntries(weekKey, ds, which);
+    addRaw(l.id, entries);
+    return entries.length;
+  }
+  function removeMeal(ds, which){ const l=active(); if(!l) return; removeSources(l.id, s=>s.kind==="recipe" && s.day===ds && s.slot===which); }
+  function mealInList(ds, which){ const l=active(); if(!l) return false; return l.items.some(it=>(it.sources||[]).some(s=>s.kind==="recipe" && s.day===ds && s.slot===which)); }
+  function addManual(nome, qty, unita){ const l=ensure(); addRaw(l.id, [{nome, qty:(qty!=null&&!isNaN(qty))?qty:null, unita:unita||"pz", source:{kind:"manual"}}]); return l; }
+  function addRecipeIngredients(r, ings){ const l=ensure(); addRaw(l.id, ings.map(ing=>({nome:ing.nome, qty:ing.qty, unita:ing.unita, reparto:ing.reparto, source:{kind:"recipe", recipeId:r.id, recipeName:r.nome}}))); return l; }
 
-  // Aggregazione: somma per (nome+dimensione), normalizza unità, raggruppa per reparto
-  function aggregate(weekKey){
-    const b=get(weekKey);
-    const raw=fromPlanner(weekKey);
-    (b.extra||[]).forEach(x=>raw.push({nome:x.nome, qty:x.qty, unita:x.unita, reparto:x.reparto||Reparti.guess(x.nome), prov:{extra:true, id:x.id}, extraId:x.id}));
-    // reparti non più presenti in Impostazioni → alias (es. Verdura → Ortofrutta)
-    const stg=Store.get().settings, alias=stg.repartiAlias||{}, deps=stg.departments||[];
-    raw.forEach(it=>{ if(it.reparto && alias[it.reparto] && !deps.includes(it.reparto)) it.reparto=alias[it.reparto]; });
-    const map={};
-    raw.forEach(it=>{
+  // ---- lista base (Impostazioni → Preferiti / lista_base_spesa.txt) ----
+  function baseStatus(){
+    const l=active(); const favs=Store.get().settings.favorites||[];
+    return favs.map(f=>{ const it=l?l.items.find(x=>norm(x.nome)===norm(f.nome)):null;
+      return {...f, reparto:applyAlias(f.reparto||Reparti.guess(f.nome)), inList:!!it, locked:!!(it && (it.sources||[]).some(s=>s.kind!=="base"))}; });
+  }
+  function setBase(selectedNames){
+    const l=ensure(); const sel=new Set(selectedNames.map(norm)); const favs=Store.get().settings.favorites||[];
+    const toAdd=[], toRemove=[];
+    favs.forEach(f=>{
+      const it=l.items.find(x=>norm(x.nome)===norm(f.nome));
+      if(sel.has(norm(f.nome))){ if(!it) toAdd.push({nome:f.nome, qty:f.qty, unita:f.unita||"pz", reparto:f.reparto, source:{kind:"base"}}); }
+      else if(it && (it.sources||[]).every(s=>s.kind==="base")) toRemove.push(it.id);
+    });
+    toRemove.forEach(id=>removeItem(l.id, id));
+    if(toAdd.length) addRaw(l.id, toAdd);
+    return {added:toAdd.length, removed:toRemove.length};
+  }
+
+  // ---- chiusura: "Spesa fatta" con eventuale riporto dei non presi in una nuova lista ----
+  function finish(id, carryOver){
+    const l=byId(id); if(!l) return null;
+    const left=l.items.filter(i=>!i.done).map(i=>JSON.parse(JSON.stringify(i)));
+    setStatus(id, "done");
+    if(carryOver && left.length){
+      const n=create();
+      Store.update(db=>{ const nl=db.shoppingLists.find(x=>x.id===n.id); left.forEach(i=>{ i.done=false; nl.items.push(i); }); });
+      return n;
+    }
+    return null;
+  }
+
+  // ---- vista: quantità sommate, unità migliore, gruppi per reparto ----
+  function display(dim, base, pref){
+    if(dim==="mass"){ const alt=["g","kg"]; const u=alt.includes(pref)?pref:(base>=1000?"kg":"g"); return {qty:u==="kg"?round2(base/1000):Math.round(base), unita:u, altUnits:alt}; }
+    if(dim==="vol"){ const alt=["ml","L"]; const u=alt.includes(pref)?pref:(base>=1000?"L":"ml"); return {qty:u==="L"?round2(base/1000):Math.round(base), unita:u, altUnits:alt}; }
+    if(dim==="count"){ return {qty:Math.max(1, Math.ceil(base-1e-6)), unita:"pz", altUnits:[]}; }
+    return {qty:Math.round(base*10)/10, unita:dim.slice(2), altUnits:[]};
+  }
+  function view(l){
+    const items=(l.items||[]).map(it=>{
       const dim=dimOf(it.unita);
-      const key=it.nome.trim().toLowerCase()+"|"+dim;
-      if(!map[key]) map[key]={key, nome:it.nome, dim, reparto:it.reparto, base:0, hasQty:false, provenienze:[], extraIds:[]};
-      const m=map[key];
-      if(it.qty!=null){ m.base+=toBase(it.qty, it.unita); m.hasQty=true; }
-      m.provenienze.push(it.prov);
-      if(it.extraId) m.extraIds.push(it.extraId);
+      const qs=(it.sources||[]).filter(s=>s.qtyBase!=null); const base=qs.reduce((a,s)=>a+s.qtyBase,0); const hasQty=qs.length>0 && dim!=="qb";
+      const d=hasQty?display(dim, base, (l.unit||{})[it.id]):{qty:null, unita:it.unita, altUnits:[]};
+      return {...it, hasQty, base, ...d, reparto:applyAlias(it.reparto)};
     });
-    // una voce senza quantità (qb) con lo stesso nome di una voce quantificata si fonde in quella
-    Object.keys(map).forEach(k=>{
-      const m=map[k]; if(m.hasQty || m.dim!=="u:qb") return;
-      const other=Object.values(map).find(o=>o!==m && o.hasQty && o.nome.trim().toLowerCase()===m.nome.trim().toLowerCase());
-      if(other){ other.provenienze.push(...m.provenienze); other.extraIds.push(...m.extraIds); delete map[k]; }
-    });
-    const items=Object.values(map).map(m=>({...m, ...display(m, b.unit[m.key]), have:!!b.have[m.key]}));
-    const order=Store.get().settings.departments;
-    const groups={};
+    const order=Store.get().settings.departments||[]; const groups={};
     items.forEach(it=>{ (groups[it.reparto]=groups[it.reparto]||[]).push(it); });
     const orderedReps=[...order.filter(r=>groups[r]), ...Object.keys(groups).filter(r=>!order.includes(r)).sort()];
-    orderedReps.forEach(r=>groups[r].sort((a,b)=>(a.have-b.have)||a.nome.localeCompare(b.nome)));
-    return { groups, orderedReps, items };
+    orderedReps.forEach(r=>groups[r].sort((a,b)=>(a.done-b.done)||a.nome.localeCompare(b.nome)));
+    const done=items.filter(i=>i.done).length;
+    return { groups, orderedReps, items, done, toBuy:items.length-done };
   }
-
-  // Da (base, dimensione) → unità "migliore" (o preferenza utente) + unità alternative
-  function display(m, pref){
-    if(m.dim==="mass"){ const alt=["g","kg"]; let u=alt.includes(pref)?pref:(m.base>=1000?"kg":"g");
-      return {qty:u==="kg"?round2(m.base/1000):Math.round(m.base), unita:u, altUnits:alt}; }
-    if(m.dim==="vol"){ const alt=["ml","L"]; let u=alt.includes(pref)?pref:(m.base>=1000?"L":"ml");
-      return {qty:u==="L"?round2(m.base/1000):Math.round(m.base), unita:u, altUnits:alt}; }
-    if(m.dim==="count"){ return {qty:Math.max(1, Math.ceil(m.base-1e-6)), unita:"pz", altUnits:[]}; }
-    return {qty:Math.round(m.base*10)/10, unita:m.dim.slice(2), altUnits:[]};
-  }
-
   function provSummary(it){
-    const recs=[...new Set(it.provenienze.filter(p=>p.recipeName).map(p=>p.recipeName))];
-    const extra=it.provenienze.some(p=>p.extra);
-    const parts=[]; if(recs.length) parts.push(recs.length>1?`${recs.length} ricette`:recs[0]); if(extra) parts.push("extra");
+    const src=it.sources||[];
+    const recs=[...new Set(src.filter(s=>s.recipeName).map(s=>s.recipeName))];
+    const parts=[]; if(recs.length) parts.push(recs.length>1?`${recs.length} ricette`:recs[0]);
+    if(src.some(s=>s.kind==="base")) parts.push("lista base");
+    if(src.some(s=>s.kind==="manual")) parts.push("aggiunto");
     return parts.join(" · ")||"—";
   }
-  function toTxt(weekKey){
-    const {groups, orderedReps}=aggregate(weekKey);
-    let out=`Lista spesa — settimana ${weekKey}\n`;
-    orderedReps.forEach(rep=>{ out+=`\n## ${rep}\n`; groups[rep].forEach(it=>{ out+=`- [ ] ${it.nome}${it.hasQty?` — ${fmtQty(it.qty)} ${it.unita}`:''}\n`; }); });
+  function toTxt(l){
+    const {groups, orderedReps}=view(l);
+    let out=`${l.name}\n`;
+    orderedReps.forEach(rep=>{ out+=`\n## ${rep}\n`; groups[rep].forEach(it=>{ out+=`- [${it.done?"x":" "}] ${it.nome}${it.hasQty?` — ${fmtQty(it.qty)} ${it.unita}`:''}\n`; }); });
     return out;
   }
-  function toCsv(weekKey){
-    const {items}=aggregate(weekKey);
-    let out="reparto,nome,quantita,unita,provenienze\n";
-    items.forEach(it=>{ out+=`"${it.reparto}","${it.nome.replace(/"/g,'""')}",${it.hasQty?fmtQty(it.qty):''},"${it.hasQty?it.unita:''}","${provSummary(it).replace(/"/g,'""')}"\n`; });
+  function toCsv(l){
+    const {items}=view(l);
+    let out="reparto,nome,quantita,unita,preso,provenienza\n";
+    items.forEach(it=>{ out+=`"${it.reparto}","${it.nome.replace(/"/g,'""')}",${it.hasQty?fmtQty(it.qty):''},"${it.hasQty?it.unita:''}",${it.done?1:0},"${provSummary(it).replace(/"/g,'""')}"\n`; });
     return out;
   }
-  return { bucket, get, addExtra, addStaples, removeExtra, setHave, setUnitPref, aggregate, provSummary, toTxt, toCsv, fmtQty };
+  return { lists, active, byId, create, ensure, setStatus, remove, rename, addRaw, addMeal, removeMeal, mealInList, mealEntries,
+    addManual, addRecipeIngredients, baseStatus, setBase, finish, removeItem, setDone, setUnitPref, view, provSummary, toTxt, toCsv, fmtQty };
 })();
 
+/* ---------------------------------------------------------------------------
 /* ---------------------------------------------------------------------------
    MODULO: Todos  — CRUD lista to-do
 --------------------------------------------------------------------------- */
@@ -1512,7 +1625,7 @@ const Backup = (function(){
     // ordine chiavi fisso → checksum riproducibile in import
     const payload={ app:APP, version:Store.SCHEMA_VERSION, createdAt:new Date().toISOString(),
       settings:db.settings, recipes:db.recipes, calendarEvents:db.calendarEvents,
-      planByWeek:db.planByWeek, shoppingByWeek:db.shoppingByWeek, todos:db.todos };
+      planByWeek:db.planByWeek, shoppingByWeek:db.shoppingByWeek, todos:db.todos, shoppingLists:db.shoppingLists||[] };
     const checksum=await sha256(JSON.stringify(payload));
     const full=checksum ? {...payload, checksum} : payload;
     return JSON.stringify(full, null, 2);
@@ -1539,7 +1652,7 @@ const Backup = (function(){
     Store.replaceAll({
       app:APP, version:obj.version, createdAt:obj.createdAt,
       settings:obj.settings, recipes:obj.recipes, calendarEvents:obj.calendarEvents,
-      planByWeek:obj.planByWeek, shoppingByWeek:obj.shoppingByWeek, todos:obj.todos
+      planByWeek:obj.planByWeek, shoppingByWeek:obj.shoppingByWeek, todos:obj.todos, shoppingLists:obj.shoppingLists||[]
     });
   }
 
@@ -1560,6 +1673,8 @@ const Backup = (function(){
       (obj.todos||[]).forEach(t=>{ const k=tKey(t); if(seenT.has(k)){ log.push("to-do duplicato: "+t.titolo); } else { db.todos.push({...t, id:t.id||("t-"+Math.random().toString(36).slice(2,8))}); seenT.add(k); } });
       Object.keys(obj.planByWeek||{}).forEach(wk=>{ if(db.planByWeek[wk]){ log.push("settimana piano già presente (mantengo locale): "+wk); } else db.planByWeek[wk]=obj.planByWeek[wk]; });
       Object.keys(obj.shoppingByWeek||{}).forEach(wk=>{ if(!db.shoppingByWeek[wk]) db.shoppingByWeek[wk]=obj.shoppingByWeek[wk]; });
+      db.shoppingLists=db.shoppingLists||[];
+      (obj.shoppingLists||[]).forEach(l=>{ if(db.shoppingLists.some(x=>x.id===l.id)) return; const copy={...l}; if((copy.status==="open"||copy.status==="shopping") && db.shoppingLists.some(x=>x.status==="open"||x.status==="shopping")){ copy.status="done"; log.push("lista spesa importata come archiviata: "+copy.name); } db.shoppingLists.push(copy); });
       // settings: in modalità unisci si mantengono quelle locali
     });
     console.log("[Backup merge]", log.length?log:"nessun conflitto");
@@ -1579,6 +1694,19 @@ const Sync = (function(){
   let _timer=null, _pushDeb=null, _statusCb=null;
 
   function cfg(){ return Store.get().settings.sync || {}; }
+  // Riduce quello che l'utente ha incollato al solo "https://<ref>.supabase.co"
+  function normalizeUrl(raw){
+    let u=String(raw||"").trim(); if(!u) return "";
+    if(!/^https?:\/\//i.test(u)) u="https://"+u;
+    try{
+      const url=new URL(u);
+      // indirizzo del pannello: https://supabase.com/dashboard/project/<ref>/...
+      const m=url.pathname.match(/\/project\/([a-z0-9]{15,})/i);
+      if(/supabase\.com$/i.test(url.hostname) && m) return `https://${m[1]}.supabase.co`;
+      return url.origin;               // toglie /rest/v1, slash finali, query ecc.
+    }catch(e){ return u.replace(/\/+$/,""); }
+  }
+  function baseUrl(){ return normalizeUrl(cfg().url); }
   function isEnabled(){ const c=cfg(); return !!(c.enabled && c.url && c.anonKey && c.code); }
 
   /* --- crypto helpers (Web Crypto) --- */
@@ -1615,13 +1743,13 @@ const Sync = (function(){
   function headers(){ const s=cfg(); return { apikey:s.anonKey, Authorization:"Bearer "+s.anonKey, Accept:"application/json" }; }
   const REST={
     async fetchRow(codeId){
-      const base=cfg().url.replace(/\/+$/,"");
+      const base=baseUrl();
       const res=await fetch(`${base}/rest/v1/sync_store?code_id=eq.${encodeURIComponent(codeId)}&select=*`, { headers:headers() });
       if(!res.ok) throw new Error("HTTP "+res.status+" "+(await res.text()).slice(0,120));
       const arr=await res.json(); return arr[0]||null;
     },
     async upsertRow(row){
-      const base=cfg().url.replace(/\/+$/,"");
+      const base=baseUrl();
       const res=await fetch(`${base}/rest/v1/sync_store`, { method:"POST",
         headers:{...headers(), "Content-Type":"application/json", Prefer:"resolution=merge-duplicates,return=minimal"},
         body:JSON.stringify(row) });
@@ -1649,7 +1777,7 @@ const Sync = (function(){
   function collectBlob(){
     const db=Store.get(); const s={...db.settings}; delete s.sync; delete s.deviceId;
     return { settings:s, recipes:db.recipes, calendarEvents:db.calendarEvents,
-      planByWeek:db.planByWeek, shoppingByWeek:db.shoppingByWeek, todos:db.todos };
+      planByWeek:db.planByWeek, shoppingByWeek:db.shoppingByWeek, todos:db.todos, shoppingLists:db.shoppingLists||[] };
   }
   async function pushBlob(blob, code, codeId, rev){
     const enc=await encryptBlob(blob, code);
@@ -1662,7 +1790,7 @@ const Sync = (function(){
       const keepSync=db.settings.sync, keepDev=db.settings.deviceId;
       db.settings={...db.settings, ...(remoteData.settings||{}), sync:keepSync, deviceId:keepDev};
       db.recipes=remoteData.recipes||[]; db.calendarEvents=remoteData.calendarEvents||[];
-      db.planByWeek=remoteData.planByWeek||{}; db.shoppingByWeek=remoteData.shoppingByWeek||{}; db.todos=remoteData.todos||[];
+      db.planByWeek=remoteData.planByWeek||{}; db.shoppingByWeek=remoteData.shoppingByWeek||{}; db.todos=remoteData.todos||[]; db.shoppingLists=remoteData.shoppingLists||[];
       db.syncMeta={...db.syncMeta, rev:remoteRev, lastPulledRev:remoteRev};
     });
     const h=await hashHex(JSON.stringify(collectBlob()));
@@ -1744,7 +1872,7 @@ const Sync = (function(){
     setStatus("off");
   }
 
-  return {
+  return { normalizeUrl,
     startAuto, stopAuto, runSync, test, isEnabled, statusText,
     // esposti per test:
     _setTransport(t){ _transport=t; }, _encryptBlob:encryptBlob, _decryptBlob:decryptBlob, _hashHex:hashHex, _collectBlob:collectBlob
@@ -2213,7 +2341,7 @@ create policy "anon full access" on sync_store
 
   // ---- sincronizzazione cloud ----
   const setSync=(k,v)=>Store.update(db=>{ db.settings.sync=db.settings.sync||{}; db.settings.sync[k]=v; });
-  el.querySelector("#sync-url").addEventListener("change", e=>setSync("url", e.target.value.trim()));
+  el.querySelector("#sync-url").addEventListener("change", e=>{ const n=Sync.normalizeUrl(e.target.value); e.target.value=n; setSync("url", n); if(n && !/\.supabase\.co$/i.test(n)) Toast.show("L'indirizzo dovrebbe essere del tipo https://xxxxx.supabase.co","warn"); });
   el.querySelector("#sync-key").addEventListener("change", e=>setSync("anonKey", e.target.value.trim()));
   el.querySelector("#sync-code").addEventListener("change", e=>setSync("code", e.target.value.trim()));
   el.querySelector("#sync-test").addEventListener("click", ()=>Sync.test());
@@ -2298,6 +2426,9 @@ async function doReset(){
 --------------------------------------------------------------------------- */
 let plannerMonday = DateUtils.getMonday(new Date());
 
+/* ---- telefono? (schermo stretto: layout agenda) ---- */
+function isPhone(){ return window.matchMedia && window.matchMedia("(max-width: 700px)").matches; }
+
 /* ---- giorni visibili della settimana (5 o 7, da Impostazioni) ---- */
 const DAY_NAMES=["Lun","Mar","Mer","Gio","Ven","Sab","Dom"];
 function dayName(d){ return DAY_NAMES[(d.getDay()+6)%7]; }
@@ -2374,6 +2505,29 @@ function buildMealCell(weekKey, ds, which, compact){
   pp.innerHTML=`👥 ${people}`;
   pp.addEventListener("click",e=>{ e.stopPropagation(); openMealPeople(pp, weekKey, ds, which); });
   wrap.appendChild(cell); wrap.appendChild(pp);
+  // tastino rapido: metti in lista della spesa gli ingredienti di questo pasto
+  if(slot && slot.recipeId){
+    const inList=Shopping.mealInList(ds, which);
+    const cart=document.createElement("button"); cart.type="button";
+    cart.className="m-cart"+(inList?" in":"");
+    cart.title=inList?"Ingredienti già in lista · tocca per aggiornare o togliere":"Metti gli ingredienti in lista della spesa";
+    cart.setAttribute("aria-label", cart.title);
+    cart.innerHTML=inList?"🛒✓":"🛒";
+    cart.addEventListener("click",e=>{
+      e.stopPropagation();
+      if(!inList){
+        const n=Shopping.addMeal(weekKey, ds, which);
+        Toast.show(n?`${n} ingredienti in lista della spesa`:"Niente da aggiungere (tutto “Ce l'ho”)", n?"ok":"warn");
+        Router.go("planner");
+      } else {
+        openPopover(cart, `<small>Questo pasto è in lista</small><button data-upd>🔄 Aggiorna le quantità</button><button data-rm>✕ Togli dalla lista</button>`, (pop, close)=>{
+          pop.querySelector("[data-upd]").addEventListener("click",()=>{ close(); const n=Shopping.addMeal(weekKey, ds, which); Toast.show(`Aggiornato: ${n} ingredienti`,"ok"); Router.go("planner"); });
+          pop.querySelector("[data-rm]").addEventListener("click",()=>{ close(); Shopping.removeMeal(ds, which); Toast.show("Tolto dalla lista"); Router.go("planner"); });
+        });
+      }
+    });
+    wrap.appendChild(cart);
+  }
   return wrap;
 }
 
@@ -2427,7 +2581,8 @@ function renderPlanner(){
   const weekKey=DateUtils.isoWeekKey(monday);
   const days=plannerDays(monday);
   const todayStr=DateUtils.ymd(DateUtils.today());
-  const layout=(s.plannerLayout==="affiancato")?"affiancato":"griglia";
+  const phone=isPhone();
+  const layout=phone?"agenda":((s.plannerLayout==="affiancato")?"affiancato":"griglia");
 
   mountWeekNav("planner");
 
@@ -2442,14 +2597,30 @@ function renderPlanner(){
     <span class="chip chip-accent tk-today" title="Oggi ${DateUtils.fmtLong(DateUtils.today())} · persone a pranzo e a cena (base ${s.defaultServings})">👥 Oggi ${tp} · ${tc}</span>
     <div class="tk-slot"></div>
     <div class="flex gap-2 items-center" style="flex:none">
-      <button class="btn btn-sm" id="wk-layout" title="Cambia disposizione (anche in Impostazioni)">⇄ ${layout==="griglia"?"Affianca la spesa":"Griglia a colonne"}</button>
-      <button class="btn btn-sm" id="wk-print" title="Stampa settimana">🖨️ Stampa</button>
-      ${layout==="griglia"?`<button class="btn btn-sm btn-primary" id="wk-shop">🛒 Spesa</button>`:""}
+      ${phone?"":`<button class="btn btn-sm" id="wk-layout" title="Cambia disposizione (anche in Impostazioni)">⇄ ${layout==="griglia"?"Affianca la spesa":"Griglia a colonne"}</button>
+      <button class="btn btn-sm" id="wk-print" title="Stampa settimana">🖨️ Stampa</button>`}
+      ${layout!=="affiancato"?`<button class="btn btn-sm btn-primary" id="wk-shop">🛒 Spesa</button>`:""}
     </div>`;
   head.querySelector(".tk-slot").replaceWith(buildTicker());
   el.appendChild(head);
 
-  if(layout==="griglia"){
+  if(layout==="agenda"){
+    // ======== TELEFONO: agenda verticale, un giorno per scheda ========
+    const ag=document.createElement("div"); ag.className="agenda";
+    days.forEach(d=>{
+      const ds=DateUtils.ymd(d);
+      const card=document.createElement("div"); card.className="agenda-day"+(ds===todayStr?" is-today":"");
+      const date=document.createElement("div"); date.className="ag-date";
+      date.innerHTML=`<span class="d-wd">${dayName(d)}</span><span class="d-num">${d.getDate()}</span>${ds===todayStr?'<span class="chip chip-accent">Oggi</span>':''}<button class="d-menu-btn" aria-label="Azioni per ${dayName(d)} ${d.getDate()}" title="Azioni giorno">⋯</button>`;
+      date.querySelector(".d-menu-btn").addEventListener("click",(e)=>{ e.stopPropagation(); openDayMenu(e.currentTarget, weekKey, ds, days); });
+      const body=document.createElement("div"); body.className="ag-body";
+      body.appendChild(buildMealCell(weekKey, ds, "pranzo", true));
+      body.appendChild(buildMealCell(weekKey, ds, "cena", true));
+      body.appendChild(buildImpegniCell(weekKey, ds, true));
+      card.appendChild(date); card.appendChild(body); ag.appendChild(card);
+    });
+    el.appendChild(ag);
+  } else if(layout==="griglia"){
     // ======== LAYOUT A: settimana a colonne ========
     const scroll=document.createElement("div"); scroll.className="planner-scroll";
     const grid=document.createElement("div"); grid.className="planner-grid"; grid.style.setProperty("--days", days.length);
@@ -2496,12 +2667,12 @@ function renderPlanner(){
       rows.appendChild(row);
     });
     split.appendChild(rows);
-    split.appendChild(buildShoppingPanel(weekKey));
+    split.appendChild(buildShoppingPanel());
     el.appendChild(split);
   }
 
-  head.querySelector("#wk-layout").addEventListener("click",()=>{ setSetting("plannerLayout", layout==="griglia"?"affiancato":"griglia"); Router.go("planner"); });
-  head.querySelector("#wk-print").addEventListener("click",()=>printWeek(weekKey, monday, days));
+  const lb=head.querySelector("#wk-layout"); if(lb) lb.addEventListener("click",()=>{ setSetting("plannerLayout", layout==="griglia"?"affiancato":"griglia"); Router.go("planner"); });
+  const pb=head.querySelector("#wk-print"); if(pb) pb.addEventListener("click",()=>printWeek(weekKey, monday, days));
   const sh=head.querySelector("#wk-shop"); if(sh) sh.addEventListener("click",()=>Router.go("spesa"));
   return el;
 }
@@ -2583,6 +2754,7 @@ function openMealModal(weekKey, dateStr, which, people){
   const foot=`
     ${(state.recipeId||state.manualText)?'<button class="btn btn-danger" data-remove style="margin-right:auto">Rimuovi</button>':''}
     <button class="btn" data-close>Annulla</button>
+    <button class="btn" data-save-cart title="Salva il pasto e metti gli ingredienti in lista della spesa">🛒 Salva e in lista</button>
     <button class="btn btn-primary" data-save>Salva</button>`;
 
   Modal.open({
@@ -2592,6 +2764,7 @@ function openMealModal(weekKey, dateStr, which, people){
       const detail=dialog.querySelector("#meal-detail");
 
       function renderDetail(){
+        const cartBtn=dialog.querySelector("[data-save-cart]"); if(cartBtn) cartBtn.disabled=!state.recipeId;
         if(state.recipeId){
           const r=Recipes.byId(state.recipeId);
           if(!r){ detail.innerHTML=`<p class="text-mute">Ricetta non trovata.</p>`; return; }
@@ -2658,7 +2831,7 @@ function openMealModal(weekKey, dateStr, which, people){
       const rm=dialog.querySelector("[data-remove]");
       if(rm) rm.addEventListener("click",()=>{ Plan.setSlot(weekKey,dateStr,which,null); close(); Toast.show("Pasto rimosso"); Router.go("planner"); });
 
-      dialog.querySelector("[data-save]").addEventListener("click",()=>{
+      function doSave(toCart){
         const txt=input.value.trim();
         Plan.setPeople(weekKey, dateStr, which, state.serv===autoServ ? null : state.serv);
         if(state.recipeId){
@@ -2669,8 +2842,14 @@ function openMealModal(weekKey, dateStr, which, people){
         } else {
           Plan.setSlot(weekKey,dateStr,which,null);
         }
-        close(); Toast.show("Pasto salvato","ok"); Router.go("planner");
-      });
+        if(!state.recipeId || !toCart){ if(Shopping.mealInList(dateStr, which)) Shopping.removeMeal(dateStr, which); }
+        let msg="Pasto salvato";
+        if(toCart && state.recipeId){ const n=Shopping.addMeal(weekKey, dateStr, which); msg=n?`Pasto salvato · ${n} ingredienti in lista`:"Pasto salvato · niente da aggiungere"; }
+        else if(state.recipeId && Shopping.mealInList(dateStr, which)){ Shopping.addMeal(weekKey, dateStr, which); msg="Pasto salvato · lista aggiornata"; }
+        close(); Toast.show(msg,"ok"); Router.go("planner");
+      }
+      dialog.querySelector("[data-save]").addEventListener("click",()=>doSave(false));
+      dialog.querySelector("[data-save-cart]").addEventListener("click",()=>doSave(true));
     }
   });
 }
@@ -2838,19 +3017,19 @@ function openAddToPlanner(r, serv){
 
 /* Invia (parte degli) ingredienti alla lista spesa della settimana corrente */
 function openSendToShopping(r, serv){
-  const weekKey=DateUtils.isoWeekKey(plannerMonday);
   const factor=Scale.factorFor(r, serv);
-  const ings=(r.ingredienti||[]).map(ing=>Scale.ingredient(ing,factor)).filter(x=>x.qtyScaled!=null);
-  Modal.open({ title:"Invia ingredienti alla spesa", bodyHTML:`
-    <p class="text-sm text-mute mb-2">Seleziona cosa aggiungere (settimana ${weekKey.split("-")[1]}, ${serv} porz.). Le voci “qb” sono escluse.</p>
-    <ul class="ing-list">${ings.length?ings.map((ing,i)=>`<li><label class="ing-have" style="flex:1;color:var(--text)"><input type="checkbox" data-i="${i}" checked> <span class="ing-name">${escapeHtml(ing.nome)}</span></label><span class="ing-qty">${escapeHtml(ing.display)}</span></li>`).join(""):'<li class="text-mute">Nessun ingrediente con quantità</li>'}</ul>`,
-    footHTML:`<button class="btn" data-close>Annulla</button><button class="btn btn-primary" data-ok>Aggiungi selezionati</button>`,
+  const ings=(r.ingredienti||[]).map(ing=>Scale.ingredient(ing,factor));
+  const l=Shopping.active();
+  Modal.open({ title:"Metti in lista della spesa", bodyHTML:`
+    <p class="text-sm text-mute mb-2">${l?`Lista attiva: <strong>${escapeHtml(l.name)}</strong>`:"Non c'è una lista attiva: ne verrà creata una nuova"} · ${serv} persone. Le voci “qb” e le spezie vanno in lista senza quantità.</p>
+    <ul class="ing-list">${ings.length?ings.map((ing,i)=>`<li><label class="ing-have" style="flex:1;color:var(--text)"><input type="checkbox" data-i="${i}" checked> <span class="ing-name">${escapeHtml(ing.nome)}</span></label><span class="ing-qty">${escapeHtml(ing.display)}</span></li>`).join(""):'<li class="text-mute">Nessun ingrediente</li>'}</ul>`,
+    footHTML:`<button class="btn" data-close>Annulla</button><button class="btn btn-primary" data-ok>🛒 Metti in lista</button>`,
     onMount(dialog,close){
       dialog.querySelector("[data-ok]").addEventListener("click",()=>{
-        const sel=[]; dialog.querySelectorAll("[data-i]").forEach(cb=>{ if(cb.checked){ const ing=ings[Number(cb.dataset.i)]; sel.push({nome:ing.nome, qty:ing.qtyScaled, unita:ing.unita, reparto:ing.reparto||Reparti.guess(ing.nome), provenienze:[{recipeId:r.id}]}); } });
+        const sel=[]; dialog.querySelectorAll("[data-i]").forEach(cb=>{ if(cb.checked){ const ing=ings[Number(cb.dataset.i)]; sel.push({nome:ing.nome, qty:ing.qtyScaled, unita:ing.unita, reparto:ing.reparto||Reparti.guess(ing.nome)}); } });
         if(!sel.length){ close(); return; }
-        Shopping.addExtra(weekKey, sel);
-        close(); Toast.show(sel.length+" ingredienti aggiunti alla spesa","ok");
+        Shopping.addRecipeIngredients(r, sel);
+        close(); Toast.show(sel.length+" ingredienti in lista della spesa","ok");
       });
     }});
 }
@@ -3126,186 +3305,269 @@ function printDay(weekKey, dateStr){
 /* ---------------------------------------------------------------------------
    VISTA: Lista della spesa (aggregata per la settimana del planner)
 --------------------------------------------------------------------------- */
-/* Lista spesa aggregata montata in un contenitore (usata dalla vista Spesa e dal pannello affiancato) */
-function mountShoppingList(container, weekKey, opts){
+/* Lista spesa montata in un contenitore (vista Spesa e pannello affiancato).
+   mode: "edit" (si riempie) | "shop" (modalità supermercato: riga intera toccabile, spunte grandi) */
+function mountShoppingList(container, listId, opts){
   opts=opts||{};
   function draw(){
-    const agg=Shopping.aggregate(weekKey);
+    const l=Shopping.byId(listId); if(!l){ container.innerHTML=""; return; }
+    const mode=opts.mode||(l.status==="shopping"?"shop":"edit");
+    const v=Shopping.view(l);
     container.innerHTML="";
-    if(!agg.items.length){
-      container.innerHTML=`<div class="empty-state">Lista vuota. Pianifica i pasti (gli ingredienti non spuntati “Ce l'ho” arrivano qui), premi “Lista base” o aggiungi articoli.</div>`;
+    if(!v.items.length){
+      container.innerHTML=`<div class="empty-state">${opts.emptyText||"Lista vuota. Aggiungi dal Planner con il tastino 🛒 su un pasto, con “Check lista base” o scrivendo qui sopra."}</div>`;
     } else {
-      agg.orderedReps.forEach(rep=>{
-        const items=agg.groups[rep];
-        const h=document.createElement("div"); h.className="rep-head";
-        h.innerHTML=`${escapeHtml(rep)} <span class="rep-count">(${items.length})</span>`;
+      v.orderedReps.forEach(rep=>{
+        const items=v.groups[rep];
+        const h=document.createElement("div"); h.className="rep-head"+(mode==="shop"?" sticky":"");
+        h.innerHTML=`${escapeHtml(rep)} <span class="rep-count">(${items.filter(i=>!i.done).length}/${items.length})</span>`;
         container.appendChild(h);
-        items.forEach(it=>container.appendChild(itemRow(it)));
+        items.forEach(it=>container.appendChild(row(l, it, mode)));
       });
     }
-    if(opts.onDraw) opts.onDraw(agg);
+    if(opts.onDraw) opts.onDraw(v, l);
   }
-  function itemRow(it){
-    const row=document.createElement("div"); row.className="shop-item"+(it.have?" have-it":"")+(opts.compact?" compact":"");
-    const prov=Shopping.provSummary(it);
-    const multi=[...new Set(it.provenienze.filter(p=>p.recipeName).map(p=>p.recipeName))].length>1
-      || it.provenienze.filter(p=>p.recipeName).length>1;
-    row.innerHTML=`
-      <input type="checkbox" class="si-check" ${it.have?'checked':''} aria-label="Ce l'ho: ${escapeAttr(it.nome)}">
+  function row(l, it, mode){
+    const shop=mode==="shop";
+    const r=document.createElement("div"); r.className="shop-item"+(it.done?" have-it":"")+(shop?" shop-mode":"")+(opts.compact?" compact":"");
+    r.innerHTML=`
+      <input type="checkbox" class="si-check" ${it.done?'checked':''} aria-label="${shop?'Comprato':'Preso'}: ${escapeAttr(it.nome)}">
       <div class="si-main">
         <div class="si-name truncate" title="${escapeAttr(it.nome)}">${escapeHtml(it.nome)}</div>
-        <div class="si-badge">${multi?`<button data-prov>${escapeHtml(prov)} ⓘ</button>`:escapeHtml(prov)}</div>
+        <div class="si-badge">${escapeHtml(Shopping.provSummary(it))}</div>
       </div>
       ${it.hasQty?`<span class="si-qty">${Shopping.fmtQty(it.qty)} ${it.unita}</span>`:''}
-      ${(it.altUnits&&it.altUnits.length>1)?`<button class="si-unit-toggle" data-toggle title="Cambia unità (${it.altUnits.join('↔')})" aria-label="Cambia unità">⇄</button>`:''}
-      ${(it.extraIds&&it.extraIds.length)?`<button class="btn btn-ghost si-del" data-del aria-label="Rimuovi ${escapeAttr(it.nome)}">✕</button>`:''}`;
-    row.querySelector(".si-check").addEventListener("change",e=>{ Shopping.setHave(weekKey, it.key, e.target.checked); draw(); });
-    const tg=row.querySelector("[data-toggle]");
-    if(tg) tg.addEventListener("click",()=>{ const alt=it.altUnits.find(u=>u!==it.unita)||it.unita; Shopping.setUnitPref(weekKey, it.key, alt); draw(); });
-    const del=row.querySelector("[data-del]");
-    if(del) del.addEventListener("click",()=>{ it.extraIds.forEach(id=>Shopping.removeExtra(weekKey,id)); draw(); Toast.show("Articolo rimosso"); });
-    const pv=row.querySelector("[data-prov]");
-    if(pv) pv.addEventListener("click",()=>openProvPopover(pv, it));
-    return row;
+      ${(!shop && it.altUnits && it.altUnits.length>1)?`<button class="si-unit-toggle" data-toggle title="Cambia unità (${it.altUnits.join('↔')})" aria-label="Cambia unità">⇄</button>`:''}
+      ${!shop?`<button class="btn btn-ghost si-del" data-del aria-label="Rimuovi ${escapeAttr(it.nome)}">✕</button>`:''}`;
+    const cb=r.querySelector(".si-check");
+    cb.addEventListener("change",()=>{ Shopping.setDone(l.id, it.id, cb.checked); draw(); });
+    if(shop) r.addEventListener("click",e=>{ if(e.target===cb) return; cb.checked=!cb.checked; cb.dispatchEvent(new Event("change")); });
+    const tg=r.querySelector("[data-toggle]");
+    if(tg) tg.addEventListener("click",()=>{ const alt=it.altUnits.find(u=>u!==it.unita)||it.unita; Shopping.setUnitPref(l.id, it.id, alt); draw(); });
+    const del=r.querySelector("[data-del]");
+    if(del) del.addEventListener("click",()=>{ Shopping.removeItem(l.id, it.id); draw(); Toast.show("Voce rimossa"); });
+    return r;
   }
   draw();
   return { draw };
 }
 
-/* Condivisione lista: navigator.share → fallback export .txt */
-async function shareShopping(weekKey){
-  const text=Shopping.toTxt(weekKey);
+/* Condivisione: navigator.share → fallback export .txt */
+async function shareShopping(l){
+  const text=Shopping.toTxt(l);
   if(navigator.share){
-    try{ await navigator.share({ title:`Lista spesa · settimana ${weekKey.split("-")[1]}`, text }); return; }
+    try{ await navigator.share({ title:l.name, text }); return; }
     catch(e){ if(e && e.name==="AbortError") return; }
   }
-  openExportShopping(weekKey);
+  openExportShopping(l);
 }
 
-/* Pannello spesa compatto (layout "affiancato" del planner) */
-function buildShoppingPanel(weekKey){
-  const s=Store.get().settings;
-  const aside=document.createElement("aside"); aside.className="shop-panel card";
-  aside.setAttribute("aria-label","Lista spesa della settimana");
+/* Check lista base: finestra scorrevole con tutte le voci base per reparto; le voci già in lista sono spuntate */
+function openBaseCheck(onDone){
+  const st=Shopping.baseStatus();
+  if(!st.length){ Toast.show("Lista base vuota: importa lista_base_spesa.txt dalle Impostazioni","warn"); return; }
+  const order=Store.get().settings.departments||[]; const groups={};
+  st.forEach(f=>{ (groups[f.reparto]=groups[f.reparto]||[]).push(f); });
+  const reps=[...order.filter(r=>groups[r]), ...Object.keys(groups).filter(r=>!order.includes(r)).sort()];
+  const l=Shopping.active();
+  const body=`
+    <p class="text-sm text-mute mb-2">${l?`Lista attiva: <strong>${escapeHtml(l.name)}</strong>.`:"Non c'è una lista attiva: confermando ne viene creata una."} Spunta ciò che ti serve; le voci già in lista sono già spuntate.</p>
+    <div class="flex gap-2 mb-2"><button class="btn btn-sm" data-all>Tutte</button><button class="btn btn-sm" data-none>Nessuna</button><span class="text-xs text-mute" style="align-self:center" id="bc-count"></span></div>
+    <div class="base-check">
+      ${reps.map(rep=>`<div class="rep-head sticky">${escapeHtml(rep)}</div>`+groups[rep].map(f=>`
+        <label class="bc-row ${f.locked?'locked':''}">
+          <input type="checkbox" data-name="${escapeAttr(f.nome)}" ${f.inList?'checked':''} ${f.locked?'disabled':''}>
+          <span class="bc-name">${escapeHtml(f.nome)}</span>
+          ${f.qty!=null?`<span class="text-mute text-xs">${Shopping.fmtQty(f.qty)} ${f.unita}</span>`:''}
+          ${f.locked?`<span class="chip chip-accent">da ricetta</span>`:''}
+        </label>`).join("")).join("")}
+    </div>`;
+  Modal.open({ title:"Check lista base", size:"lg", bodyHTML:body,
+    footHTML:`<button class="btn" data-close>Annulla</button><button class="btn btn-primary" data-ok>Aggiorna la lista</button>`,
+    onMount(dialog, close){
+      const boxes=[...dialog.querySelectorAll("[data-name]")];
+      const count=()=>{ dialog.querySelector("#bc-count").textContent=boxes.filter(b=>b.checked).length+" selezionate"; };
+      boxes.forEach(b=>b.addEventListener("change",count)); count();
+      dialog.querySelector("[data-all]").addEventListener("click",()=>{ boxes.forEach(b=>{ if(!b.disabled) b.checked=true; }); count(); });
+      dialog.querySelector("[data-none]").addEventListener("click",()=>{ boxes.forEach(b=>{ if(!b.disabled) b.checked=false; }); count(); });
+      dialog.querySelector("[data-ok]").addEventListener("click",()=>{
+        const sel=boxes.filter(b=>b.checked).map(b=>b.dataset.name);
+        const r=Shopping.setBase(sel);
+        close(); Toast.show(`Lista base: ${r.added} aggiunte${r.removed?`, ${r.removed} tolte`:""}`,"ok");
+        if(onDone) onDone();
+      });
+    }});
+}
+
+/* Chiudi lista → modalità supermercato */
+function closeListToShopping(l, after){
+  Shopping.setStatus(l.id, "shopping");
+  Toast.show("Lista chiusa: modalità supermercato","ok");
+  if(after) after();
+}
+/* Spesa fatta → archivio, con riporto facoltativo dei non presi */
+function finishList(l, after){
+  const v=Shopping.view(l);
+  Modal.open({ title:"Spesa fatta", bodyHTML:`
+      <p>${v.done} voci prese${v.toBuy?`, <strong>${v.toBuy}</strong> non prese`:""}.</p>
+      ${v.toBuy?`<label class="ing-have" style="color:var(--text)"><input type="checkbox" id="fl-carry" checked> <span>Crea subito una nuova lista con le ${v.toBuy} voci non prese</span></label>`:""}
+      <p class="help mt-2">La lista finisce nell'archivio della Spesa.</p>`,
+    footHTML:`<button class="btn" data-close>Annulla</button><button class="btn btn-primary" data-ok>✅ Conferma</button>`,
+    onMount(dialog, close){
+      dialog.querySelector("[data-ok]").addEventListener("click",()=>{
+        const carry=dialog.querySelector("#fl-carry"); const n=Shopping.finish(l.id, !!(carry&&carry.checked));
+        close(); Toast.show(n?"Spesa archiviata, nuova lista con i non presi":"Spesa archiviata","ok"); if(after) after();
+      });
+    }});
+}
+
+/* Archivio liste chiuse */
+function archiveHTML(){
+  const done=Shopping.lists().filter(l=>l.status==="done").slice(0,12);
+  if(!done.length) return "";
+  return `<details class="mt-4 sp-archive"><summary>Liste passate (${done.length})</summary>
+    <div class="flex" style="flex-direction:column;gap:6px;margin-top:8px">${done.map(l=>{ const v=Shopping.view(l); return `
+      <div class="shop-item" data-list="${l.id}"><div class="si-main"><div class="si-name">${escapeHtml(l.name)}</div><div class="si-badge">${v.items.length} voci · ${v.done} prese · ${l.doneAt?DateUtils.fmtShort(new Date(l.doneAt)):""}</div></div>
+        <button class="btn btn-sm" data-view>Vedi</button>${Shopping.active()?"":`<button class="btn btn-sm" data-reopen>Riapri</button>`}<button class="btn btn-ghost si-del" data-del aria-label="Elimina">✕</button></div>`; }).join("")}</div></details>`;
+}
+function wireArchive(root){
+  root.querySelectorAll("[data-list]").forEach(row=>{
+    const id=row.dataset.list;
+    row.querySelector("[data-view]").addEventListener("click",()=>{ const l=Shopping.byId(id); Modal.open({title:l.name, size:"lg", bodyHTML:`<pre class="block" style="white-space:pre-wrap">${escapeHtml(Shopping.toTxt(l))}</pre>`, footHTML:`<button class="btn" data-close>Chiudi</button>`}); });
+    const ro=row.querySelector("[data-reopen]"); if(ro) ro.addEventListener("click",()=>{ Shopping.setStatus(id,"open"); Router.go("spesa"); });
+    row.querySelector("[data-del]").addEventListener("click", async ()=>{ const ok=await Modal.confirm({title:"Elimina lista", message:"Eliminare questa lista dall'archivio?", confirmLabel:"Elimina", danger:true}); if(ok){ Shopping.remove(id); Router.go(Router.currentName()); } });
+  });
+}
+
+/* Pannello spesa compatto (planner "affiancato") */
+function buildShoppingPanel(){
+  const aside=document.createElement("aside"); aside.className="shop-panel card"; aside.setAttribute("aria-label","Lista spesa");
+  const l=Shopping.active();
+  if(!l){
+    aside.innerHTML=`<div class="sp-head"><div class="sp-title">Spesa</div></div>
+      <div class="empty-state" style="padding:16px 8px">Nessuna lista attiva.</div>
+      <button class="btn btn-primary" id="spp-new">➕ Nuova lista</button>
+      <button class="btn" id="spp-base">🧺 Check lista base</button>`;
+    aside.querySelector("#spp-new").addEventListener("click",()=>{ Shopping.create(); Router.go("planner"); });
+    aside.querySelector("#spp-base").addEventListener("click",()=>openBaseCheck(()=>Router.go("planner")));
+    return aside;
+  }
+  const shop=l.status==="shopping";
   aside.innerHTML=`
     <div class="sp-head">
-      <div><div class="sp-title">Spesa · sett. ${weekKey.split("-")[1]}</div><div class="sp-sum text-xs text-mute" id="spp-summary"></div></div>
+      <div><div class="sp-title">${escapeHtml(l.name)}</div><div class="sp-sum text-xs text-mute" id="spp-summary"></div></div>
       <div class="flex gap-1">
-        <button class="btn btn-icon btn-sm" id="spp-share" title="Condividi lista" aria-label="Condividi lista">📤</button>
-        <button class="btn btn-icon btn-sm" id="spp-full" title="Apri la Spesa completa" aria-label="Apri la Spesa completa">⤢</button>
+        ${shop?"":`<button class="btn btn-icon btn-sm" id="spp-base" title="Check lista base" aria-label="Check lista base">🧺</button>`}
+        <button class="btn btn-icon btn-sm" id="spp-share" title="Condividi" aria-label="Condividi">📤</button>
+        <button class="btn btn-icon btn-sm" id="spp-full" title="Apri la Spesa" aria-label="Apri la Spesa">⤢</button>
       </div>
     </div>
+    ${shop?`<div class="shop-banner small">🛒 Modalità supermercato</div>`:""}
     <div class="sp-tools">
-      <input type="text" id="spp-name" placeholder="Aggiungi articolo… (Invio)" aria-label="Aggiungi articolo">
-      <button class="btn btn-sm" id="spp-base" title="Aggiunge le cose che compri sempre (Impostazioni → Preferiti)">📋 Lista base</button>
+      <input type="text" id="spp-name" placeholder="${shop?"Dimenticato qualcosa? (Invio)":"Aggiungi voce… (Invio)"}" aria-label="Aggiungi voce">
+      ${shop?`<button class="btn btn-sm btn-primary" id="spp-done">✅ Fatta</button>`:`<button class="btn btn-sm btn-primary" id="spp-close">🔒 Chiudi</button>`}
     </div>
     <div class="sp-list" id="spp-list"></div>`;
-  const list=mountShoppingList(aside.querySelector("#spp-list"), weekKey, { compact:true, onDraw(agg){
-    const tb=agg.items.filter(i=>!i.have).length;
-    aside.querySelector("#spp-summary").textContent=`${tb} da comprare · ${agg.items.length-tb} presi`;
-  }});
+  const list=mountShoppingList(aside.querySelector("#spp-list"), l.id, { compact:true, onDraw(v){ aside.querySelector("#spp-summary").textContent=`${v.toBuy} da comprare · ${v.done} ${shop?"nel carrello":"presi"}`; }});
   const nameEl=aside.querySelector("#spp-name");
-  nameEl.addEventListener("keydown",e=>{
-    if(e.key!=="Enter") return; e.preventDefault();
-    const name=nameEl.value.trim(); if(!name) return;
-    Shopping.addExtra(weekKey,[{nome:name, qty:null, unita:"pz", provenienze:[{extra:true}]}]);
-    nameEl.value=""; list.draw(); Toast.show("Aggiunto alla spesa","ok");
-  });
-  aside.querySelector("#spp-base").addEventListener("click",()=>{ const n=Shopping.addStaples(weekKey); list.draw(); Toast.show(n?`${n} articoli della lista base aggiunti`:"Lista base già presente", n?"ok":""); });
-  aside.querySelector("#spp-share").addEventListener("click",()=>shareShopping(weekKey));
+  nameEl.addEventListener("keydown",e=>{ if(e.key!=="Enter") return; e.preventDefault(); const n=nameEl.value.trim(); if(!n) return; Shopping.addManual(n, null, "pz"); nameEl.value=""; list.draw(); Toast.show("Aggiunto","ok"); });
+  const b=aside.querySelector("#spp-base"); if(b) b.addEventListener("click",()=>openBaseCheck(()=>Router.go("planner")));
+  aside.querySelector("#spp-share").addEventListener("click",()=>shareShopping(Shopping.byId(l.id)));
   aside.querySelector("#spp-full").addEventListener("click",()=>Router.go("spesa"));
+  const c=aside.querySelector("#spp-close"); if(c) c.addEventListener("click",()=>closeListToShopping(l, ()=>Router.go("planner")));
+  const d=aside.querySelector("#spp-done"); if(d) d.addEventListener("click",()=>finishList(Shopping.byId(l.id), ()=>Router.go("planner")));
   return aside;
 }
 
+/* VISTA: Spesa */
 function renderShopping(){
-  const s=Store.get().settings;
-  const weekKey=DateUtils.isoWeekKey(plannerMonday);
-  const units=s.unitPrefs;
-  mountWeekNav("spesa");
+  const s=Store.get().settings, units=s.unitPrefs;
   const el=document.createElement("div"); el.className="view";
+  const l=Shopping.active();
+  if(!l){
+    el.innerHTML=`
+      <div class="view-head"><h1 style="margin:0">Lista spesa</h1></div>
+      <div class="card sp-empty">
+        <div class="big">🛒</div>
+        <p style="font-weight:600">Nessuna lista attiva</p>
+        <p class="text-sm text-mute">Creane una qui, oppure dal Planner con il tastino 🛒 su un pasto.</p>
+        <div class="flex gap-2 flex-wrap justify-center mt-3">
+          <button class="btn btn-primary" id="sp-new">➕ Nuova lista della spesa</button>
+          <button class="btn" id="sp-base">🧺 Check lista base</button>
+        </div>
+      </div>
+      ${archiveHTML()}`;
+    el.querySelector("#sp-new").addEventListener("click",()=>{ Shopping.create(); Router.go("spesa"); });
+    el.querySelector("#sp-base").addEventListener("click",()=>openBaseCheck(()=>Router.go("spesa")));
+    wireArchive(el);
+    return el;
+  }
+  const shop=l.status==="shopping";
   el.innerHTML=`
     <div class="view-head">
-      <div class="flex gap-2 items-center"><h1 style="margin:0">Lista spesa</h1><span class="chip">Settimana ${weekKey.split("-")[1]}</span></div>
-      <div class="flex gap-2">
-        <button class="btn btn-sm" id="sp-base" title="Aggiunge le cose che compri sempre (Impostazioni → Preferiti)">📋 Lista base</button>
+      <div><h1 style="margin:0" id="sp-title" title="Tocca per rinominare">${escapeHtml(l.name)}</h1><div class="text-xs text-mute" id="sp-summary"></div></div>
+      <div class="flex gap-2 flex-wrap">
+        ${shop?`<button class="btn btn-sm" id="sp-reopen">↩︎ Riapri</button>`:`<button class="btn btn-sm" id="sp-base">🧺 Check lista base</button>`}
         <button class="btn btn-sm" id="sp-share">📤 Condividi</button>
         <button class="btn btn-sm" id="sp-print">🖨️ Stampa</button>
         <button class="btn btn-sm" id="sp-export">⬇️ Export</button>
+        ${shop?`<button class="btn btn-sm btn-primary" id="sp-done">✅ Spesa fatta</button>`:`<button class="btn btn-sm btn-primary" id="sp-close">🔒 Chiudi lista</button>`}
       </div>
     </div>
-
-    <div class="card mb-4">
-      <label class="mb-2" style="display:block">Aggiungi articolo extra</label>
+    ${shop?`<div class="shop-banner">🛒 <strong>Modalità supermercato</strong> · tocca una voce quando la metti nel carrello. Alla fine premi “Spesa fatta”.</div>`:""}
+    <div class="card mb-4 ${shop?"sp-add-compact":""}">
+      ${shop?"":`<label class="mb-2" style="display:block">Aggiungi voce</label>`}
       <div class="shop-add">
-        <div class="field"><input type="text" id="sp-name" placeholder="es. Detersivo piatti" aria-label="Nome articolo"></div>
-        <div class="field"><input type="number" id="sp-qty" placeholder="1" min="0" step="any" aria-label="Quantità"></div>
+        <div class="field"><input type="text" id="sp-name" placeholder="${shop?"Dimenticato qualcosa?":"es. Detersivo piatti"}" aria-label="Nome voce"></div>
+        <div class="field"><input type="number" id="sp-qty" placeholder="q.tà" min="0" step="any" aria-label="Quantità"></div>
         <div class="field"><select id="sp-unit" aria-label="Unità">${units.map(u=>`<option ${u==='pz'?'selected':''}>${u}</option>`).join("")}</select></div>
         <button class="btn btn-primary sa-btn" id="sp-add">+ Aggiungi</button>
       </div>
-      <div class="fav-row">
-        <span class="text-xs text-mute" style="align-self:center">Lista base:</span>
-        ${(s.favorites||[]).map((f,i)=>`<button class="chip fav-chip" data-fav="${i}">${escapeHtml(f.nome)} ${f.qty!=null?`<span class="text-mute">${Shopping.fmtQty(f.qty)} ${f.unita}</span>`:""}</button>`).join("")}
-      </div>
     </div>
-
-    <div class="shop-summary" id="sp-summary"></div>
-    <div id="sp-list"></div>`;
-
-  const list=mountShoppingList(el.querySelector("#sp-list"), weekKey, { onDraw(agg){
-    const tb=agg.items.filter(i=>!i.have).length;
-    el.querySelector("#sp-summary").innerHTML=`<span>🛒 <strong>${tb}</strong> da comprare</span><span>✓ ${agg.items.length-tb} già presi</span>`;
-  }});
+    <div id="sp-list"></div>
+    ${archiveHTML()}`;
+  const list=mountShoppingList(el.querySelector("#sp-list"), l.id, { onDraw(v){ el.querySelector("#sp-summary").textContent=`${v.toBuy} da comprare · ${v.done} ${shop?"nel carrello":"presi"}${l.closedAt?` · chiusa il ${DateUtils.fmtShort(new Date(l.closedAt))}`:""}`; }});
   function addArticle(){
     const nameEl=el.querySelector("#sp-name"); const name=nameEl.value.trim();
     if(!name){ nameEl.focus(); return; }
     const qty=parseFloat(String(el.querySelector("#sp-qty").value||"").replace(",","."));
-    Shopping.addExtra(weekKey, [{nome:name, qty:isNaN(qty)?null:qty, unita:el.querySelector("#sp-unit").value, provenienze:[{extra:true}]}]);
+    Shopping.addManual(name, isNaN(qty)?null:qty, el.querySelector("#sp-unit").value);
     nameEl.value=""; el.querySelector("#sp-qty").value=""; nameEl.focus();
-    list.draw(); Toast.show("Aggiunto alla spesa","ok");
+    list.draw(); Toast.show("Aggiunto alla lista","ok");
   }
   el.querySelector("#sp-add").addEventListener("click", addArticle);
   el.querySelector("#sp-name").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addArticle(); } });
-  el.querySelectorAll("[data-fav]").forEach(b=>b.addEventListener("click",()=>{
-    const f=s.favorites[Number(b.dataset.fav)];
-    Shopping.addExtra(weekKey,[{nome:f.nome, qty:f.qty, unita:f.unita, provenienze:[{extra:true}]}]);
-    list.draw(); Toast.show(f.nome+" aggiunto","ok");
-  }));
-  el.querySelector("#sp-base").addEventListener("click",()=>{ const n=Shopping.addStaples(weekKey); list.draw(); Toast.show(n?`${n} articoli della lista base aggiunti`:"Lista base già presente", n?"ok":""); });
-  el.querySelector("#sp-share").addEventListener("click",()=>shareShopping(weekKey));
-  el.querySelector("#sp-print").addEventListener("click",()=>printShopping(weekKey));
-  el.querySelector("#sp-export").addEventListener("click",()=>openExportShopping(weekKey));
+  el.querySelector("#sp-title").addEventListener("click", async ()=>{ const n=await Modal.prompt?Modal.prompt({title:"Nome lista", value:l.name}):null; if(n){ Shopping.rename(l.id, n); Router.go("spesa"); } });
+  const b=el.querySelector("#sp-base"); if(b) b.addEventListener("click",()=>openBaseCheck(()=>Router.go("spesa")));
+  const ro=el.querySelector("#sp-reopen"); if(ro) ro.addEventListener("click",()=>{ Shopping.setStatus(l.id,"open"); Router.go("spesa"); });
+  const cl=el.querySelector("#sp-close"); if(cl) cl.addEventListener("click",()=>closeListToShopping(l, ()=>Router.go("spesa")));
+  const dn=el.querySelector("#sp-done"); if(dn) dn.addEventListener("click",()=>finishList(Shopping.byId(l.id), ()=>Router.go("spesa")));
+  el.querySelector("#sp-share").addEventListener("click",()=>shareShopping(Shopping.byId(l.id)));
+  el.querySelector("#sp-print").addEventListener("click",()=>printShopping(Shopping.byId(l.id)));
+  el.querySelector("#sp-export").addEventListener("click",()=>openExportShopping(Shopping.byId(l.id)));
+  wireArchive(el);
   return el;
 }
 
-/* Popover provenienza: da quali ricette/giorni/slot arriva la voce */
-function openProvPopover(anchor, it){
-  const byRecipe={};
-  it.provenienze.forEach(p=>{ if(p.recipeName){ (byRecipe[p.recipeName]=byRecipe[p.recipeName]||[]).push(p); } });
-  const dn=["Lun","Mar","Mer","Gio","Ven","Sab","Dom"];
-  let html=`<small>Proviene da</small>`;
-  html+=Object.keys(byRecipe).map(rn=>{
-    const occ=byRecipe[rn].map(p=>`${dn[(DateUtils.parseYmd(p.day).getDay()+6)%7]} ${p.slot}`).join(", ");
-    return `<button type="button" style="cursor:default">${escapeHtml(rn)} <span class="text-mute">· ${escapeHtml(occ)}</span></button>`;
-  }).join("");
-  if(it.provenienze.some(p=>p.extra)) html+=`<button type="button" style="cursor:default">✍️ Aggiunto manualmente</button>`;
-  openPopover(anchor, html);
-}
+/* Popover provenienza (non più usato nelle righe; mantenuto per compatibilità) */
+function openProvPopover(anchor, it){ openPopover(anchor, `<small>Proviene da</small><button type="button" style="cursor:default">${escapeHtml(Shopping.provSummary(it))}</button>`); }
 
 /* Stampa lista (layout A4 per reparti) */
-function printShopping(weekKey){
-  const {groups, orderedReps}=Shopping.aggregate(weekKey);
-  const inner=orderedReps.map(rep=>`<div class="p-day"><h3>${escapeHtml(rep)}</h3><table><tbody>${groups[rep].map(it=>`<tr><td>☐ ${escapeHtml(it.nome)}</td><td style="text-align:right">${it.hasQty?escapeHtml(Shopping.fmtQty(it.qty)+" "+it.unita):""}</td></tr>`).join("")}</tbody></table></div>`).join("");
-  printHTML(`Lista spesa · settimana ${weekKey.split("-")[1]}`, inner||"<p>Lista vuota</p>");
+function printShopping(l){
+  const {groups, orderedReps}=Shopping.view(l);
+  const inner=orderedReps.map(rep=>`<div class="p-day"><h3>${escapeHtml(rep)}</h3><table><tbody>${groups[rep].map(it=>`<tr><td>${it.done?"☑":"☐"} ${escapeHtml(it.nome)}</td><td style="text-align:right">${it.hasQty?escapeHtml(Shopping.fmtQty(it.qty)+" "+it.unita):""}</td></tr>`).join("")}</tbody></table></div>`).join("");
+  printHTML(l.name, inner||"<p>Lista vuota</p>");
 }
 /* Export .txt / .csv */
-function openExportShopping(weekKey){
+function openExportShopping(l){
+  const slug=l.name.toLowerCase().replace(/[^a-z0-9]+/g,"-");
   Modal.open({ title:"Esporta lista spesa",
-    bodyHTML:`<p class="text-sm text-mute mb-3">Solo la lista della settimana corrente.</p>
+    bodyHTML:`<p class="text-sm text-mute mb-3">${escapeHtml(l.name)}</p>
       <div class="flex gap-2 flex-wrap"><button class="btn" data-txt>⬇️ Testo (.txt)</button><button class="btn" data-csv>⬇️ CSV (.csv)</button></div>`,
     footHTML:`<button class="btn" data-close>Chiudi</button>`,
     onMount(dialog){
-      dialog.querySelector("[data-txt]").addEventListener("click",()=>downloadFile(`spesa-${weekKey}.txt`, Shopping.toTxt(weekKey), "text/plain"));
-      dialog.querySelector("[data-csv]").addEventListener("click",()=>downloadFile(`spesa-${weekKey}.csv`, Shopping.toCsv(weekKey), "text/csv"));
+      dialog.querySelector("[data-txt]").addEventListener("click",()=>downloadFile(`${slug}.txt`, Shopping.toTxt(l), "text/plain"));
+      dialog.querySelector("[data-csv]").addEventListener("click",()=>downloadFile(`${slug}.csv`, Shopping.toCsv(l), "text/csv"));
     }});
 }
 
@@ -3935,14 +4197,21 @@ const Pwa = (function(){
   }
   function applyUpdate(){ if(waiting) waiting.postMessage("skipWaiting"); else if(reg) reg.update(); }
 
+  const isAndroid=/Android/i.test(navigator.userAgent);
   function maybeHint(){
-    if(!isIOS || standalone) return;
+    if((!isIOS && !isAndroid) || standalone) return;
     if(localStorage.getItem("pw-install-hint")) return;
     localStorage.setItem("pw-install-hint","1");
-    setTimeout(()=>Modal.open({ title:"Installa sull'iPad", bodyHTML:`
+    setTimeout(()=>Modal.open({ title:isAndroid?"Installa sul telefono":"Installa sull'iPad / iPhone", bodyHTML: isAndroid ? `
+      <p>Per avere il Planner come <strong>app con icona</strong>, a tutto schermo:</p>
+      <ol style="padding-left:1.2em;line-height:1.7">
+        <li>In Chrome tocca il menu <strong>⋮</strong> in alto a destra.</li>
+        <li>Scegli <strong>“Installa app”</strong> oppure <strong>“Aggiungi a schermata Home”</strong>.</li>
+        <li>Conferma, poi apri il Planner dall'icona.</li>
+      </ol>` : `
       <p>Per avere il Planner come <strong>app con icona</strong>, a tutto schermo e con i dati al sicuro anche se svuoti Safari:</p>
       <ol style="padding-left:1.2em;line-height:1.7">
-        <li>Tocca il pulsante <strong>Condividi</strong> di Safari (il quadrato con la freccia in alto).</li>
+        <li>Tocca il pulsante <strong>Condividi</strong> di Safari (il quadrato con la freccia).</li>
         <li>Scorri e scegli <strong>“Aggiungi alla schermata Home”</strong>.</li>
         <li>Conferma con <strong>Aggiungi</strong>, poi apri il Planner dall'icona.</li>
       </ol>
@@ -3954,6 +4223,7 @@ const Pwa = (function(){
     if(standalone) return {chip:"✅ Installata come app", help:"Stai usando il Planner dall'icona sulla schermata Home. I dati stanno nella memoria dell'app, separata da Safari: svuotare cronologia e dati dei siti non li tocca. Spariscono solo se elimini l'icona, quindi fai ogni tanto un backup qui sotto."};
     if(location.protocol==="file:") return {chip:"📄 Aperta da file", help:"Per installarla sull'iPad la pagina deve stare su un indirizzo web (https). Vedi il file LEGGIMI-iPad.md nella cartella del progetto."};
     if(isIOS) return {chip:"🌐 Aperta in Safari", help:"Tocca Condividi → “Aggiungi alla schermata Home” per installarla. Fino ad allora i dati stanno in Safari e un reset del browser li cancella."};
+    if(isAndroid) return {chip:"🌐 Aperta nel browser", help:"In Chrome: menu ⋮ → “Installa app” (o “Aggiungi a schermata Home”). Da installata ha la sua icona e funziona offline."};
     return {chip:"🌐 Aperta nel browser", help:"Su iPad/iPhone: apri questo indirizzo in Safari e usa Condividi → “Aggiungi alla schermata Home”. Su Mac/PC il browser può offrire “Installa app” nella barra dell'indirizzo."};
   }
   async function refreshStatus(root){
@@ -4015,6 +4285,8 @@ function boot(){
 
   // web app installabile: service worker, memoria persistente, suggerimento iPad
   Pwa.init();
+  // telefono ↔ tablet: al cambio di larghezza il planner si ridisegna con la disposizione giusta
+  if(window.matchMedia){ const mq=window.matchMedia("(max-width: 700px)"); const onChange=()=>{ if(Router.currentName()==="planner") Router.go("planner"); }; if(mq.addEventListener) mq.addEventListener("change", onChange); else if(mq.addListener) mq.addListener(onChange); }
 
   // identità dispositivo + avvio sincronizzazione se configurata
   if(!Store.get().settings.deviceId) setSetting("deviceId", "dev-"+Math.random().toString(36).slice(2,10));
