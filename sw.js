@@ -3,8 +3,8 @@
    arrivano appena pubblicati; se non c'è rete si usa la copia in cache.
    Icone e manifest: prima cache, poi rete.
    Per forzare un aggiornamento della cache basta cambiare VERSION. */
-const VERSION = "pw-2026-10-11-7";
-const CORE = ["./", "./index.html", "./manifest.webmanifest?v=2", "./icon-180.png?v=2", "./icon-192.png?v=2", "./icon-512.png?v=2", "./icon-512-maskable.png?v=2"];
+const VERSION = "pw-2026-10-11-11";
+const CORE = ["./", "./index.html", "./manifest.webmanifest?v=3", "./icon-180.png?v=3", "./icon-192.png?v=3", "./icon-512.png?v=3", "./icon-512-maskable.png?v=3"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(CORE)).then(() => self.skipWaiting()));

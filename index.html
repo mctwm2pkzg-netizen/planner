@@ -13,10 +13,10 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Planner">
 <meta name="application-name" content="Planner">
-<link rel="manifest" href="manifest.webmanifest?v=2">
+<link rel="manifest" href="manifest.webmanifest?v=3">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="apple-touch-icon" href="icon-180.png?v=2">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=2">
+<link rel="apple-touch-icon" href="icon-180.png?v=3">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=3">
 <!--
   ============================================================================
   PLANNER WEEKLY  —  Single-file offline app (HTML + CSS + JS inline)
@@ -758,7 +758,7 @@ code.block{ border-radius:12px; }
    inchiostro 2px e ombra dura 3px (2px per i piccoli). Niente raggi, sfumature,
    trasparenze. Titoli serif rosa con ombra azzurra.
    =========================================================================== */
-:root[data-style="carte"]{
+:root[data-style="carte"], :root[data-style="carte"][data-accent]{
   --ck-ink:#222222; --ck-avorio:#F7EFE2; --ck-rosa:#D6216F; --ck-azzurro:#36ADE0; --ck-macchia:#D6CFC2;
   --ck-tenue:#6E6458; --ck-barra:#DDD4C4; --ck-giallo:#EFD63A; --ck-verde:#3F9F4A; --ck-arancio:#E39A43;
   --ck-rosa-chiara:#F6D3E2; --ck-azzurro-chiaro:#D4ECF7; --ck-giallo-chiaro:#F9F2C9; --ck-verde-chiaro:#D6EBD8; --ck-arancio-chiaro:#F8E6D0;
@@ -923,7 +923,7 @@ code.block{ border-radius:12px; }
    =========================================================================== */
 
 /* ---------- condivisi: regole sui componenti letti dai token ---------- */
-:root[data-style="mercato"], :root[data-style="pastello"], :root[data-style="mono"], :root[data-style="fumetto"]{
+:root[data-style="mercato"], :root[data-style="pastello"], :root[data-style="mono"], :root[data-style="fumetto"], :root[data-style="fumetto"][data-accent]{
   --glass:var(--surface); --glass-border:var(--border);
 }
 :root[data-style="mercato"] .app-header, :root[data-style="pastello"] .app-header, :root[data-style="mono"] .app-header, :root[data-style="fumetto"] .app-header,
@@ -931,7 +931,7 @@ code.block{ border-radius:12px; }
 :root[data-style="mercato"] .modal-backdrop, :root[data-style="mono"] .modal-backdrop, :root[data-style="fumetto"] .modal-backdrop{ backdrop-filter:none; }
 
 /* =========================== MERCATO (Banco frigo) =========================== */
-:root[data-style="mercato"]{
+:root[data-style="mercato"], :root[data-style="mercato"][data-accent]{
   --font-display:"Oswald","Arial Narrow",Impact,sans-serif; --font-body:"Nunito Sans","Avenir Next","Segoe UI",system-ui,sans-serif;
   --bg:#dfe7ee; --surface:#ffffff; --surface-2:#f2f6f9; --text:#142033; --text-soft:#44536a; --text-mute:#5c6b80;
   --border:#bccad8; --border-strong:#142033;
@@ -1003,7 +1003,7 @@ code.block{ border-radius:12px; }
 :root[data-style="mercato"] .cd{ border-radius:4px; }
 
 /* =========================== PASTELLO =========================== */
-:root[data-style="pastello"]{
+:root[data-style="pastello"], :root[data-style="pastello"][data-accent]{
   --font-display:"Quicksand","Avenir Next Rounded","Nunito",system-ui,sans-serif; --font-body:"Nunito","Avenir Next","Segoe UI",system-ui,sans-serif;
   --bg:#dfe6ee; --surface:#ffffff; --surface-2:#eef2f8; --text:#2a3340; --text-soft:#4f5b6c; --text-mute:#6f7a8a;
   --border:#e3e8ef; --border-strong:#c9d2de;
@@ -1071,7 +1071,7 @@ code.block{ border-radius:12px; }
 :root[data-style="pastello"] .imp-dot{ width:8px; height:8px; }
 
 /* =========================== MONOSPAZIO =========================== */
-:root[data-style="mono"]{
+:root[data-style="mono"], :root[data-style="mono"][data-accent]{
   --font-display:"IBM Plex Mono","SF Mono",Menlo,Consolas,monospace; --font-body:"IBM Plex Mono","SF Mono",Menlo,Consolas,monospace;
   --bg:#e6e8e3; --surface:#ffffff; --surface-2:#f5f6f2; --text:#1b1f1c; --text-soft:#454c47; --text-mute:#5f6861;
   --border:#1b1f1c; --border-strong:#1b1f1c;
@@ -1146,7 +1146,7 @@ code.block{ border-radius:12px; }
 :root[data-style="mono"] *{ transition:none !important; }
 
 /* =========================== FUMETTO =========================== */
-:root[data-style="fumetto"]{
+:root[data-style="fumetto"], :root[data-style="fumetto"][data-accent]{
   --font-display:"Bangers","Impact","Arial Black",sans-serif; --font-body:"Nunito","Avenir Next","Segoe UI",system-ui,sans-serif;
   --bg:#f7f7f4; --surface:#ffffff; --surface-2:#f1f1ec; --text:#111111; --text-soft:#333333; --text-mute:#555555;
   --border:#111111; --border-strong:#111111;
@@ -1352,10 +1352,10 @@ code.block{ border-radius:12px; }
 :root[data-style="lavagna"] .bc-row .bc-name{ font-size:var(--fs-base); }
 :root[data-style="lavagna"] .cd{ border-radius:4px; }
 /* =========================== LAVAGNA DEL MERCATO (Mercato in versione lavagna) =========================== */
-:root[data-style="lavagna"]{
+:root[data-style="lavagna"], :root[data-style="lavagna"][data-accent]{
   --font-display:"Oswald","Arial Narrow",Impact,sans-serif; --font-body:"Nunito Sans","Avenir Next","Segoe UI",system-ui,sans-serif;
-  --bg:#243129; --surface:#2c3b32; --surface-2:#34463b; --text:#f4efe4; --text-soft:#d6d9cf; --text-mute:#aeb8ae;
-  --border:#5f6f64; --border-strong:#f4efe4; --glass:#243129; --glass-border:#5f6f64;
+  --bg:#243129; --surface:#2a3930; --surface-2:#33453a; --text:#f4efe4; --text-soft:#dcdfd4; --text-mute:#bfc7bd;
+  --border:#7d8c80; --border-strong:#f4efe4; --glass:#243129; --glass-border:#7d8c80;
   --accent:#ffd166; --accent-2:#ffdc85; --accent-strong:#ffd166; --accent-contrast:#1f2a24; --accent-ring:rgba(255,209,102,.4); --accent-soft:#4a4426; --accent-grad:#ffd166;
   --danger:#ff7b7b; --danger-soft:#4a2a2a; --warn:#ffd166; --ok:#7bd389; --u-green:#7bd389; --u-yellow:#ffd166; --u-orange:#ffa96b; --u-red:#ff7b7b;
   --radius:8px; --radius-sm:8px; --radius-lg:10px; --radius-btn:6px; --shadow-1:none; --shadow-2:0 10px 30px rgba(0,0,0,.4);
@@ -1379,7 +1379,13 @@ code.block{ border-radius:12px; }
 :root[data-style="lavagna"] .tk-chip.red{ background:transparent; color:var(--danger); border-color:var(--danger); } :root[data-style="lavagna"] .tk-chip.orange{ background:transparent; color:var(--u-orange); border-color:var(--u-orange); } :root[data-style="lavagna"] .tk-chip.yellow{ background:transparent; color:var(--accent); border-color:var(--accent); }
 :root[data-style="lavagna"] .pg-day.is-today .d-num, :root[data-style="lavagna"] .pl-row.is-today .d-num, :root[data-style="lavagna"] .agenda-day.is-today .d-num{ color:var(--accent); }
 :root[data-style="lavagna"] .pg-day .d-today{ background:var(--accent); color:var(--accent-contrast); }
-:root[data-style="lavagna"] .pl-row, :root[data-style="lavagna"] .agenda-day, :root[data-style="lavagna"] .meal-cell, :root[data-style="lavagna"] .imp-cell, :root[data-style="lavagna"] .card, :root[data-style="lavagna"] .shop-item, :root[data-style="lavagna"] .rec-card, :root[data-style="lavagna"] .shop-panel, :root[data-style="lavagna"] .empty-state{ background:rgba(244,239,228,.06); border-color:rgba(244,239,228,.35); }
+:root[data-style="lavagna"] .pl-row, :root[data-style="lavagna"] .agenda-day, :root[data-style="lavagna"] .meal-cell, :root[data-style="lavagna"] .imp-cell, :root[data-style="lavagna"] .card, :root[data-style="lavagna"] .shop-item, :root[data-style="lavagna"] .rec-card, :root[data-style="lavagna"] .shop-panel, :root[data-style="lavagna"] .empty-state{ background:rgba(244,239,228,.07); border:1.5px solid rgba(244,239,228,.5); }
+:root[data-style="lavagna"] .meal-cell.is-empty{ border:1.5px dashed rgba(244,239,228,.45); background:transparent; }
+:root[data-style="lavagna"] .pg-day{ border-bottom:2px dashed rgba(244,239,228,.6); }
+:root[data-style="lavagna"] .pg-day .d-wd, :root[data-style="lavagna"] .pl-day .d-wd, :root[data-style="lavagna"] .ag-date .d-wd{ color:var(--text-mute); }
+:root[data-style="lavagna"] .meal-cell .m-title{ color:#ffffff; }
+:root[data-style="lavagna"] .imp-row .imp-title, :root[data-style="lavagna"] .si-name{ color:var(--text); }
+:root[data-style="lavagna"] .rl-letter{ color:var(--text-mute); }
 :root[data-style="lavagna"] .pl-row.is-today, :root[data-style="lavagna"] .agenda-day.is-today{ border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent); background:rgba(255,209,102,.08); }
 :root[data-style="lavagna"] .meal-cell:hover{ background:rgba(244,239,228,.12); }
 :root[data-style="lavagna"] .meal-cell.is-empty{ color:var(--text-mute); }
@@ -1441,7 +1447,7 @@ code.block{ border-radius:12px; }
 <!-- ======================= FOOTER ======================= -->
 <footer class="app-footer" role="contentinfo">
   <div class="container flex justify-between flex-wrap gap-2">
-    <span>Planner Weekly · dati salvati solo sul tuo dispositivo · nessuna rete</span>
+    <span>Planner Weekly <span id="ft-ver"></span> · dati salvati solo sul tuo dispositivo · nessuna rete</span>
     <span>Scorciatoie: <kbd>G</kbd> Planner · <kbd>R</kbd> Ricette · <kbd>S</kbd> Spesa · <kbd>T</kbd> To-Do</span>
   </div>
 </footer>
@@ -1731,13 +1737,16 @@ const Theme = (function(){
   function apply(){
     const s = Store.get().settings;
     const html = document.documentElement;
-    html.setAttribute("data-theme", s.theme==="dark"?"dark":"light");
-    html.setAttribute("data-accent", s.accent||"teal");
     const STYLES=["moderno","carte","mercato","lavagna","pastello","mono","fumetto"];
     const style=STYLES.includes(s.style)?s.style:"moderno";
     html.setAttribute("data-style", style);
+    // Tema chiaro/scuro e colore d'accento valgono solo per Moderno: gli altri stili hanno colori fissi, come nelle anteprime
+    html.setAttribute("data-theme", (style==="moderno" && s.theme==="dark")?"dark":"light");
+    html.setAttribute("data-accent", style==="moderno"?(s.accent||"teal"):"teal");
     // carattere dello stile caricato solo quando serve (Google Fonts); il service worker lo tiene in cache
     const FONTS={ mercato:"Oswald:wght@500;600&family=Nunito+Sans:wght@500;700;800", lavagna:"Oswald:wght@500;600&family=Nunito+Sans:wght@500;700;800", pastello:"Quicksand:wght@600;700&family=Nunito:wght@500;700;800", mono:"IBM+Plex+Mono:wght@500;600;700", fumetto:"Bangers&family=Nunito:wght@500;700;800" };
+    const TC={moderno:(s.theme==="dark"?"#161b25":"#0d9488"), carte:"#D6216F", mercato:"#142033", lavagna:"#8a5a2b", pastello:"#dfe6ee", mono:"#1b1f1c", fumetto:"#111111"};
+    document.querySelectorAll('meta[name="theme-color"]').forEach(m=>m.setAttribute("content", TC[style]||"#0d9488"));
     if(FONTS[style] && !document.getElementById("font-"+style)){
       const l=document.createElement("link"); l.id="font-"+style; l.rel="stylesheet"; l.href="https://fonts.googleapis.com/css2?family="+FONTS[style]+"&display=swap"; document.head.appendChild(l);
     }
@@ -2924,8 +2933,8 @@ function renderSettings(){
       <!-- ASPETTO -->
       <div class="set-group">
         <h3>Aspetto</h3>
-        <div class="set-row">
-          <div class="set-label"><label class="mb-0">Tema</label><small>Chiaro o scuro</small></div>
+        <div class="set-row" id="theme-row" ${(s.style||'mono')==='moderno'?'':'hidden'}>
+          <div class="set-label"><label class="mb-0">Tema</label><small>Chiaro o scuro (solo per lo stile Moderno)</small></div>
           <div class="seg" role="group" aria-label="Tema">
             <button type="button" data-theme-opt="light" aria-pressed="${s.theme!=='dark'}">☀️ Chiaro</button>
             <button type="button" data-theme-opt="dark" aria-pressed="${s.theme==='dark'}">🌙 Scuro</button>
@@ -2943,8 +2952,8 @@ function renderSettings(){
             ${[["bosco","#0f7a4d","Verde bosco"],["inchiostro","#1f4fb8","Blu inchiostro"],["ambra","#b8690a","Ambra"],["prugna","#7a2f8a","Prugna"]].map(([k,c,l])=>`<button type="button" class="swatch" data-mono-opt="${k}" aria-pressed="${(s.monoColor||'bosco')===k}" aria-label="${l}" title="${l}" style="background:${c}"></button>`).join("")}
           </div>
         </div>
-        <div class="set-row">
-          <div class="set-label"><label class="mb-0">Colore accento</label><small>Anteprima live</small></div>
+        <div class="set-row" id="accent-row" ${(s.style||'mono')==='moderno'?'':'hidden'}>
+          <div class="set-label"><label class="mb-0">Colore accento</label><small>Solo per lo stile Moderno: gli altri stili hanno i loro colori</small></div>
           <div class="swatch-row" role="group" aria-label="Colore accento">
             ${["teal","blue","coral","violet","amber"].map(c=>`
               <button type="button" class="swatch" data-accent-opt="${c}" aria-pressed="${s.accent===c}"
@@ -3084,7 +3093,8 @@ function renderSettings(){
         <div class="flex gap-2 flex-wrap items-center">
           <span class="chip" id="pwa-status">…</span>
           <span class="chip" id="pwa-storage" hidden></span>
-          <button class="btn btn-sm" id="pwa-update" hidden>🔄 Aggiorna app</button>
+          <span class="chip" title="Versione dell'app in uso">v. ${APP_VERSION}</span>
+          <button class="btn btn-sm" id="pwa-reload" title="Scarica di nuovo l'app dal sito (i dati restano)">🔄 Ricarica l'app</button>
         </div>
       </div>
 
@@ -3146,6 +3156,8 @@ create policy "anon full access" on sync_store
     setSetting("style", b.dataset.styleOpt); Theme.apply();
     el.querySelectorAll("[data-style-opt]").forEach(x=>x.setAttribute("aria-pressed", x===b));
     const mr=el.querySelector("#mono-row"); if(mr) mr.hidden=(b.dataset.styleOpt!=="mono");
+    const ar=el.querySelector("#accent-row"); if(ar) ar.hidden=(b.dataset.styleOpt!=="moderno");
+    const tr=el.querySelector("#theme-row"); if(tr) tr.hidden=(b.dataset.styleOpt!=="moderno");
   }));
   el.querySelectorAll("[data-mono-opt]").forEach(b=>b.addEventListener("click",()=>{
     setSetting("monoColor", b.dataset.monoOpt); Theme.apply();
@@ -5187,6 +5199,7 @@ function escapeAttr(str){ return escapeHtml(str); }
      una memoria separata da Safari: il reset del browser non le tocca.
    - Mostra un suggerimento di installazione una sola volta su iPad/iPhone.
 --------------------------------------------------------------------------- */
+const APP_VERSION = "2026-10-11.11";
 const Pwa = (function(){
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
   const standalone = window.navigator.standalone===true || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
@@ -5262,9 +5275,15 @@ const Pwa = (function(){
       }
     }catch(e){}
   }
+  async function hardReload(){
+    Toast.show("Ricarico l'app dal sito…","ok",2000);
+    try{ const regs=await navigator.serviceWorker.getRegistrations(); for(const r of regs) await r.unregister(); }catch(e){}
+    try{ const keys=await caches.keys(); for(const k of keys) await caches.delete(k); }catch(e){}
+    setTimeout(()=>{ location.href=location.pathname+"?r="+Date.now(); }, 600);
+  }
   function renderSettings(el){
     refreshStatus(el);
-    const b=el.querySelector("#pwa-update"); if(b) b.addEventListener("click", applyUpdate);
+    const b=el.querySelector("#pwa-reload"); if(b) b.addEventListener("click", hardReload);
   }
   return { init, renderSettings, isIOS, standalone };
 })();
@@ -5306,6 +5325,7 @@ function boot(){
 
   // web app installabile: service worker, memoria persistente, suggerimento iPad
   Pwa.init();
+  const fv=document.getElementById("ft-ver"); if(fv) fv.textContent="v. "+APP_VERSION;
   // telefono ↔ tablet: al cambio di larghezza il planner si ridisegna con la disposizione giusta
   if(window.matchMedia){ const mq=window.matchMedia("(max-width: 700px)"); const onChange=()=>{ if(Router.currentName()==="planner") Router.go("planner"); }; if(mq.addEventListener) mq.addEventListener("change", onChange); else if(mq.addListener) mq.addListener(onChange); }
 
