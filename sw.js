@@ -3,7 +3,7 @@
    arrivano appena pubblicati; se non c'è rete si usa la copia in cache.
    Icone e manifest: prima cache, poi rete.
    Per forzare un aggiornamento della cache basta cambiare VERSION. */
-const VERSION = "pw-2026-09-12-9";
+const VERSION = "pw-2026-10-10-7";
 const CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png", "./icon-512-maskable.png"];
 
 self.addEventListener("install", (e) => {
@@ -21,6 +21,13 @@ self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
+  // font di Google: prima cache, poi rete (così gli stili restano uguali anche offline)
+  if (url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com") {
+    e.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => {
+      const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); return res;
+    }).catch(() => hit)));
+    return;
+  }
   if (url.origin !== location.origin) return; // es. sync cloud: passa diretto
 
   const isPage = req.mode === "navigate" || url.pathname.endsWith("/index.html") || url.pathname.endsWith("/");
