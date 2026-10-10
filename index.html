@@ -1416,6 +1416,30 @@ code.block{ border-radius:12px; }
 :root[data-style="lavagna"] .app-footer{ color:var(--text-mute); border-top-color:rgba(244,239,228,.3); }
 :root[data-style="lavagna"] .bc-row{ border-bottom-color:rgba(244,239,228,.2); }
 :root[data-style="lavagna"] .sp-stage .help, :root[data-style="lavagna"] .help{ color:var(--text-mute); }
+
+/* --- impegni: di chi è (FRA / FLA / entrambi), orario, agenda unica --- */
+.chi-chip{ display:inline-grid; place-items:center; min-width:34px; height:20px; padding:0 6px; border-radius:6px; font-size:10px; font-weight:800; letter-spacing:.04em; color:#fff; background:linear-gradient(90deg,var(--c1) 0 50%,var(--c2) 50% 100%); flex:none; vertical-align:middle; margin-right:4px; }
+.chi-chip.sm{ height:18px; font-size:9.5px; min-width:30px; }
+.chi-pick{ display:flex; gap:6px; }
+.chi-pick button{ flex:1; min-height:44px; border:2px solid var(--border-strong); border-radius:10px; background:var(--surface); font:inherit; font-weight:800; letter-spacing:.04em; cursor:pointer; color:var(--text); }
+.chi-pick button[aria-pressed="true"]{ background:linear-gradient(90deg,var(--c1) 0 50%,var(--c2) 50% 100%); color:#fff; border-color:transparent; }
+.ora{ display:inline-block; font-weight:800; font-variant-numeric:tabular-nums; margin-right:6px; color:var(--accent-strong); }
+.imp-ora{ font-weight:800; font-variant-numeric:tabular-nums; font-size:11px; color:var(--accent-strong); flex:none; }
+.imp-dot.todo{ background:transparent; border:1.5px solid var(--text-mute); }
+.imp-row.imp-todo .imp-title{ font-weight:600; }
+.ag-dayhead{ font-size:var(--fs-xs); font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--text-mute); margin:14px 0 6px; padding-bottom:4px; border-bottom:1px solid var(--border); }
+.ag-dayhead:first-child{ margin-top:4px; }
+:root[data-style="mono"] .chi-chip, :root[data-style="mono"] .chi-pick button{ border-radius:0; }
+:root[data-style="carte"] .chi-chip, :root[data-style="carte"] .chi-pick button{ border-radius:0; }
+:root[data-style="fumetto"] .chi-chip{ border:1.5px solid var(--border-strong); }
+
+.bc-row .bc-qty{ width:110px; min-height:36px; padding:4px 8px; font-size:var(--fs-xs); margin-left:auto; flex:none; }
+@media(max-width:700px){ .bc-row{ flex-wrap:wrap; } .bc-row .bc-qty{ width:100%; margin-left:34px; } }
+
+.sup-logo-img{ display:inline-block; border-radius:50%; object-fit:cover; flex:none; vertical-align:middle; background:#fff; }
+.sup-btn .sup-logo-img{ border-radius:8px; }
+.pop .sup-logo-img{ border-radius:6px; }
+:root[data-style="mono"] .sup-logo-img, :root[data-style="carte"] .sup-logo-img{ border-radius:0; }
 </style>
 </head>
 <body>
@@ -1431,7 +1455,7 @@ code.block{ border-radius:12px; }
       <button data-nav="planner">Planner</button>
       <button data-nav="ricette">Ricette</button>
       <button data-nav="spesa">Spesa</button>
-      <button data-nav="checklist">Checklist</button>
+      <button data-nav="checklist">Impegni</button>
       <button data-nav="impostazioni" class="btn-icon nav-gear" title="Impostazioni" aria-label="Impostazioni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></button>
     </nav>
   </div>
@@ -1448,7 +1472,7 @@ code.block{ border-radius:12px; }
 <footer class="app-footer" role="contentinfo">
   <div class="container flex justify-between flex-wrap gap-2">
     <span>Planner Weekly <span id="ft-ver"></span> · dati salvati solo sul tuo dispositivo · nessuna rete</span>
-    <span>Scorciatoie: <kbd>G</kbd> Planner · <kbd>R</kbd> Ricette · <kbd>S</kbd> Spesa · <kbd>T</kbd> To-Do</span>
+    <span>Scorciatoie: <kbd>G</kbd> Planner · <kbd>R</kbd> Ricette · <kbd>S</kbd> Spesa · <kbd>T</kbd> Impegni</span>
   </div>
 </footer>
 
@@ -1501,6 +1525,7 @@ const Store = (function(){
         urgencyDays: 7,
         departments: ["Verdura","Latticini","Carne","Dispensa","Igiene","Casa"],
         repartiAlias: {},
+        people: [ {id:"fra", sigla:"FRA", nome:"Francesco", colore:"#2563eb"}, {id:"fla", sigla:"FLA", nome:"Flavia", colore:"#d6216f"} ],
         ingredientAlias: {},
         supermercati: [],
         supermercatoAttivo: "",
@@ -2265,18 +2290,35 @@ const Shopping = (function(){
   function baseStatus(){
     const l=active(); const favs=Store.get().settings.favorites||[];
     return favs.map(f=>{ const it=l?l.items.find(x=>norm(x.nome)===norm(f.nome)):null;
-      return {...f, reparto:applyAlias(f.reparto||Reparti.guess(f.nome)), inList:!!it, locked:!!(it && (it.sources||[]).some(s=>s.kind!=="base"))}; });
+      let cur="";
+      if(it){ const v=view(l).items.find(x=>x.id===it.id); if(v){ cur=v.hasQty?v.qtyText:""; if(v.confezioni) cur=(cur?cur+" · ":"")+v.confezioni+" conf"; } }
+      return {...f, reparto:applyAlias(f.reparto||Reparti.guess(f.nome)), inList:!!it, itemId:it?it.id:null, cur, locked:!!(it && (it.sources||[]).some(s=>s.kind!=="base"))}; });
   }
-  function setBase(selectedNames){
-    const l=ensure(); const sel=new Set(selectedNames.map(norm)); const favs=Store.get().settings.favorites||[];
-    const toAdd=[], toRemove=[];
+  // "2", "500 g", "3 conf", "500 g 2 conf" → {qty, unita, confezioni}
+  function parseQtyText(t){
+    const out={qty:null, unita:null, confezioni:null}; t=String(t||"").trim().toLowerCase(); if(!t) return out;
+    const c=t.match(/(\d+)\s*conf/); if(c){ out.confezioni=parseInt(c[1],10); t=t.replace(c[0],"").replace(/[·,]/g," ").trim(); }
+    if(t){ const q=Units.parseQty(t); if(q.qty!=null){ out.qty=q.qty; out.unita=q.unita; } }
+    return out;
+  }
+  function setBase(selected){  // [{nome, qtyText}]
+    const l=ensure(); const favs=Store.get().settings.favorites||[];
+    const selMap=new Map(selected.map(x=>[norm(x.nome), x]));
+    const toAdd=[], toRemove=[], toQty=[];
     favs.forEach(f=>{
-      const it=l.items.find(x=>norm(x.nome)===norm(f.nome));
-      if(sel.has(norm(f.nome))){ if(!it) toAdd.push({nome:f.nome, qty:f.qty, unita:f.unita||"pz", reparto:f.reparto, source:{kind:"base"}}); }
+      const it=l.items.find(x=>norm(x.nome)===norm(f.nome)); const pick=selMap.get(norm(f.nome));
+      if(pick){
+        const pq=parseQtyText(pick.qtyText);
+        if(!it) toAdd.push({nome:f.nome, qty:(pq.qty!=null?pq.qty:f.qty), unita:(pq.unita||f.unita||"pz"), reparto:f.reparto, source:{kind:"base"}, _conf:pq.confezioni, _manual:pq.qty!=null});
+        else toQty.push({id:it.id, pq, touched:pick.qtyText!==pick.initial});
+      }
       else if(it && (it.sources||[]).every(s=>s.kind==="base")) toRemove.push(it.id);
     });
     toRemove.forEach(id=>removeItem(l.id, id));
-    if(toAdd.length) addRaw(l.id, toAdd);
+    if(toAdd.length) addRaw(l.id, toAdd.map(x=>({nome:x.nome, qty:x.qty, unita:x.unita, reparto:x.reparto, source:x.source})));
+    // confezioni/quantità scritte a mano sulle voci nuove
+    toAdd.forEach(x=>{ if(x._conf||x._manual){ const it=active().items.find(i=>norm(i.nome)===norm(x.nome)); if(it) setItemQty(l.id, it.id, { ...(x._manual?{qty:x.qty, unita:x.unita}:{}), ...(x._conf?{confezioni:x._conf}:{}) }); } });
+    toQty.forEach(x=>{ if(!x.touched) return; setItemQty(l.id, x.id, { qty:x.pq.qty, unita:x.pq.unita||undefined, confezioni:x.pq.confezioni }); });
     return {added:toAdd.length, removed:toRemove.length};
   }
 
@@ -2361,32 +2403,44 @@ const Shopping = (function(){
 --------------------------------------------------------------------------- */
 const Supermercati = (function(){
   const COOP_SEZIONI=["Colazione e dolciario","Alimentari confezionati (uova, latte, panna)","Macelleria","Latticini e banco frigo","Panetteria e pasticceria","Alimentari confezionati (secco)","Gastronomia e salumeria","Pulizia della casa","Igiene e cura della persona","Abbigliamento e intimo","Bevande e cantina","Ortofrutta","Casalinghi e bazar","Cancelleria","Surgelati e gelati"];
+  // Ordine = priorità. Una sezione "A|B" usa A se il negozio la ha, altrimenti B.
   const COOP_PAROLE=[
+    [/(brodo|dado\b|concentrat|fecola|pangrattat|crostin|latte di cocco|succo di limone|aglio in polvere|cipolla in polvere|in scatola|in lattina|in vasetto|sott'?oli|sottacet)/,"Alimentari confezionati (secco)"],
     [/(surgel|gelat[oi]\b|congelat|bastoncin)/,"Surgelati e gelati"],
-    [/(detersiv|ammorbident|candeggin|sgrassat|lavastovigl|brillantant|sacch|spazzatur|spugn|strofinacc|carta (casa|cucina)|alcool|alcol|anticalcar|lavatrice|piatti)/,"Pulizia della casa"],
-    [/(carta igienic|fazzolett|dentifric|spazzolin|shampoo|bagnoschium|sapone|deodorant|assorbent|cotone|rasoi|crema (viso|mani|corpo)|cerott|salviett)/,"Igiene e cura della persona"],
-    [/(acqua|birra|vino|pepsi|coca|aranciat|succo|bibita|spumante|prosecco|limonat|gassos)/,"Bevande e cantina"],
-    [/(biscott|fette biscott|cereal|marmellat|nutella|crema spalm|merendin|brioche|cornflakes|cioccolat|caramell|zucchero|miele|caff[eè]|\bt[eè](?![a-z])|orzo|cacao|gallett)/,"Colazione e dolciario"],
-    [/(uov[ao]|latte\b|latte (intero|parz|scremat|soia|avena|riso|mandorl)|panna|besciamella|lievito|yogurt da bere)/,"Alimentari confezionati (uova, latte, panna)"],
-    [/(yogurt|burro|mozzarell|parmigian|grana|formagg|ricotta|stracchino|mascarpone|caciott|scamorz|philadelphia|gnocch|raviol|tortellin|pasta fresca|sfoglia|hamburger veg|polpett|tofu|seitan|w[uü]rstel|pancett|dadini)/,"Latticini e banco frigo"],
-    [/(prosciutt|salame|mortadell|bresaol|speck|coppa|fesa|affettat|salum|gastronom|insalata russa|olive ascol)/,"Gastronomia e salumeria"],
-    [/(pollo|manzo|maiale|vitello|tacchino|carne|macinat|salsicc|hamburger|cotolett|bistecc|arrosto|spezzatino|coniglio|agnello|petto)/,"Macelleria"],
-    [/(pane\b|panin|piadin|focacc|grissin|crackers?|pizza|tortill|pan bauletto|pancarr[eè])/,"Panetteria e pasticceria"],
-    [/(pasta\b|spaghett|penne|fusill|riso\b|farina|passata|pelat|pomodori pelati|salsa|sugo|pesto|tonno|sgombro|legum|fagiol|cec[ei]|lenticch|pisell|mais|olio|aceto|sale\b|pepe|spezi|paprik|curry|origano|dado|brodo|maionese|ketchup|senape|cetriolin|oliv|capper|sott|salatin|patatine|conserv|zuppa)/,"Alimentari confezionati (secco)"],
-    [/(zucchin|pomodor|insalat|lattug|lattughin|basilic|verdur|patat|cipoll|aglio|carot|spinac|melanzan|peperon|rucol|frutt|mel[ae]\b|banan|limon|aranc|fragol|fungh|prezzemol|sedano|finocch|cavol|broccol|zucca|pera|pere|uva|kiwi|pesc[ah]|albicocc|cilieg|anguri|melon|avocado|porr|radicch|cetriol|fagiolin|erbe)/,"Ortofrutta"],
+    [/(detersiv|ammorbident|candeggin|sgrassat|lavastovigl|brillantant|sacch|spazzatur|spugn|strofinacc|carta (casa|cucina)|alcool|alcol|anticalcar|lavatrice|piatti|scottex|\bpann[oi]\b)/,"Pulizia della casa"],
+    [/(cerott|vitamin|integrator|termometr|disinfett|garz|aspirin|tachipirin|sciropp)/,"Parafarmacia|Igiene e cura della persona"],
+    [/(carta igienic|fazzolett|dentifric|spazzolin|shampoo|bagnoschium|sapone|deodorant|assorbent|pannolin|salviett|cotone|rasoi|crema (viso|mani|corpo)|balsamo)/,"Igiene e cura della persona"],
+    [/(alluminio|pellicola|carta forno|stoviglie|bicchier|piatti di carta|tovaglio|candel|lampadin|pil[ae]\b|batteri[ae])/,"Casalinghi e bazar"],
+    [/(quadern|penn[ae] (a sfera|biro)|biro|matit|pennarell|gomma da|colla stick|nastro adesiv|cartellin|busta|evidenziator)/,"Cancelleria"],
+    [/(crocchett|croccantin|cibo (gatto|cane)|sabbia (gatto|per gatti)|lettiera|scatolett[ae] (gatto|cane))/,"Animali|Casalinghi e bazar"],
+    [/(acqua\b|birra|vino|pepsi|coca|aranciat|succo|bibita|spumante|prosecco|limonat|gassos|chinotto|the freddo|tè freddo)/,"Bevande e cantina"],
+    [/(biscott|fette biscott|cereal|marmellat|nutella|crema spalm|merendin|brioche|cornflakes|cioccolat|cacao|caramell|zucchero|miele|caff[eè]|\bt[eè](?![a-z])|camomill|tisan|orzo|gallett|savoiard|lievito per dolci|vanill|vanigl|pan di spagna|torta|crostat|wafer)/,"Colazione e dolciario"],
+    [/(uov[ao]|latte\b|latte (intero|parz|scremat|soia|avena|riso|mandorl|senza)|panna|besciamella|lievito|yogurt da bere)/,"Alimentari confezionati (uova, latte, panna)"],
+    [/(yogurt|burro|mozzarell|parmigian|grana|pecorin|formagg|ricotta|stracchin|mascarpon|caciott|scamorz|provol|emmental|gorgonzol|fontin|feta\b|brie\b|robiol|philadelphia|taleggi|asiago|crescenza|squacqueron|gnocch|raviol|tortellin|lasagne fresche|pasta fresca|sfoglia|hamburger veg|polpett|tofu|seitan|w[uü]rstel|pancett|dadini|guancial|lardo|cubett)/,"Latticini e banco frigo"],
+    [/(prosciutt|\bcrudo\b|\bcotto\b|salame|salamin|mortadell|bresaol|speck|coppa|fesa|affettat|salum|gastronom|insalata russa|olive ascol|porchett|culatell|lonz)/,"Gastronomia e salumeria"],
+    [/(pollo|manzo|maiale|vitell|tacchin|carne|macinat|salsicc|hamburger|cotolett|bistecc|arrost|spezzatin|coniglio|agnello|petto|costin|costolett|fettin|ossobuc|brasat|straccett|spiedin|pesce|salmon|orat[ae]|branzin|spigol|merluzz|baccal|gamber|vongol|cozz|calamar|sepp|polp[oi]\b|alic[ie]|acciug|sogliol|trota|tonno fresco|pesce spada|sgombro fresco)/,"Macelleria"],
+    [/(pane\b|panin|piadin|focacc|grissin|crackers?|pizza|tortill|pan bauletto|pancarr[eè]|pane in cassetta|baguette|ciabatt|taralli|friselle)/,"Panetteria e pasticceria"],
+    [/(pasta\b|spaghett|penne\b|fusill|maccheron|rigaton|farfall|tagliatell|linguin|lasagne\b|riso\b|farina|semol|couscous|cous cous|farro|orzo perlato|quinoa|passata|pelat|salsa|sugo|pesto|tonno|sgombro|alici sott|legum|fagiol|cec[ei]|lenticch|pisell|mais|olio|aceto|sale\b|\bpepe\b|spezi|paprik|curry|origano|cannell|zenzer|cumin|noce moscat|curcum|rosmarino secc|dado|maionese|ketchup|senape|cetriolin|oliv|capper|salatin|patatine|conserv|zuppa|minestr|noci|nocciol|mandorl|pinol|uvett|tahin|semi di|frutta secca|datter|fichi secch)/,"Alimentari confezionati (secco)"],
+    [/(zucchin|pomodor|insalat|lattug|lattughin|basilic|verdur|patat|cipoll|scalogn|aglio|carot|spinac|melanzan|peperon|rucol|frutt|mel[ae]\b|banan|limon|aranc|mandarin|clementin|fragol|fungh|prezzemol|sedano|finocch|cavol|broccol|zucca|pera\b|pere\b|uva\b|kiwi|pesc[ah]\b|albicocc|cilieg|anguri|melon|avocado|porr|radicch|cetriol|fagiolin|erbe|erba cipollin|salvia|rosmarin|timo\b|menta|rapa\b|rape\b|bietol|asparag|carciof|ravanell|verza|cipollott|fav[ae]\b|cavoletti|songino|valerian|indivia|scarol|pomp?elm|ananas|mango|lampon|mirtill|prugn|susin|castagn|peperoncin|zenzero fresco)/,"Ortofrutta"],
   ];
+  const LOGO_COOP="data:image/png;base64,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";
+  const LOGO_PAM="data:image/png;base64,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";
   const PAM_SEZIONI=["Pulizia della casa","Igiene e cura della persona","Gastronomia e salumeria","Panetteria e pasticceria","Ortofrutta","Casalinghi e bazar","Cancelleria","Abbigliamento e intimo","Macelleria","Latticini e banco frigo","Alimentari confezionati (uova, latte, panna)","Surgelati e gelati","Colazione e dolciario","Alimentari confezionati (secco)","Bevande e cantina","Parafarmacia"];
   const MAPPA_STD={ "Ortofrutta":"Ortofrutta", "Verdura":"Ortofrutta", "Dispensa":"Alimentari confezionati (secco)", "Frigo / Surgelati":"Latticini e banco frigo", "Latticini":"Latticini e banco frigo", "Carne":"Macelleria", "Casa":"Pulizia della casa", "Igiene":"Igiene e cura della persona" };
   function defaults(){
     return [
-      { id:"coop", nome:"Coop", emoji:"🟥", colore:"#e30613", sezioni:COOP_SEZIONI.slice(), mappa:{...MAPPA_STD} },
-      { id:"pam", nome:"Pam Panorama", emoji:"🟦", colore:"#0b4ea2", sezioni:PAM_SEZIONI.slice(), mappa:{...MAPPA_STD} }
+      { id:"coop", nome:"Coop", emoji:"🟥", colore:"#e30613", logo:LOGO_COOP, sezioni:COOP_SEZIONI.slice(), mappa:{...MAPPA_STD} },
+      { id:"pam", nome:"Pam", emoji:"🟩", colore:"#009246", logo:LOGO_PAM, sezioni:PAM_SEZIONI.slice(), mappa:{...MAPPA_STD} }
     ];
   }
   function all(){
     const s=Store.get().settings;
     if(!s.supermercati||!s.supermercati.length){ Store.update(db=>{ db.settings.supermercati=defaults(); }); }
-    else { const miss=defaults().filter(d=>!s.supermercati.some(x=>x.id===d.id)); if(miss.length) Store.update(db=>{ db.settings.supermercati.push(...miss); }); }
+    else {
+      const defs=defaults(); const miss=defs.filter(d=>!s.supermercati.some(x=>x.id===d.id));
+      const needLogo=s.supermercati.some(x=>defs.some(d=>d.id===x.id && d.logo && !x.logo));
+      if(miss.length||needLogo) Store.update(db=>{ db.settings.supermercati.push(...miss); db.settings.supermercati.forEach(x=>{ const d=defs.find(z=>z.id===x.id); if(d && d.logo && !x.logo){ x.logo=d.logo; x.colore=d.colore; x.emoji=d.emoji; if(x.id==="pam" && x.nome==="Pam Panorama") x.nome="Pam"; } }); });
+    }
     return Store.get().settings.supermercati;
   }
   function byId(id){ return all().find(x=>x.id===id)||null; }
@@ -2394,8 +2448,10 @@ const Supermercati = (function(){
   function setActive(id){ setSetting("supermercatoAttivo", id||""); }
   function sectionFor(sup, it){
     const ov=(sup.override||{})[IngKey.key(it.nome)]; if(ov && sup.sezioni.includes(ov)) return ov;
-    { const n=String(it.nome||"").toLowerCase(); for(const [re,sec] of COOP_PAROLE){ if(re.test(n) && sup.sezioni.includes(sec)) return sec; } }
-    const m=(sup.mappa||{})[it.reparto]; if(m && sup.sezioni.includes(m) && !it.repartoAuto) return m;
+    { const n=String(it.nome||"").toLowerCase(); for(const [re,sec] of COOP_PAROLE){ if(re.test(n)){ const alt=sec.split("|").find(z=>sup.sezioni.includes(z)); if(alt) return alt; } } }
+    const fromBase=(it.sources||[]).some(x=>x.kind==="base");
+    const auto=it.repartoAuto===true || (it.repartoAuto===undefined && !fromBase && !Reparti.match(it.nome));
+    const m=(sup.mappa||{})[it.reparto]; if(m && sup.sezioni.includes(m) && !auto) return m;
     return "Altro";   // non riconosciuta: in fondo, in evidenza, da sistemare con un tocco sulla quantità
   }
   function setOverride(supId, nome, sezione){ Store.update(db=>{ const sup=(db.settings.supermercati||[]).find(x=>x.id===supId); if(!sup) return; sup.override=sup.override||{}; const k=IngKey.key(nome); if(sezione) sup.override[k]=sezione; else delete sup.override[k]; }); }
@@ -2745,7 +2801,7 @@ const Parse = (function(){
   }
 
   // ---- calendario.txt: "data/rrule | TIPO | TITOLO | NOTE | OPZIONI" ----
-  const CAL_TYPES=["SCADENZA","TODO","COMPLEANNO","ANNIVERSARIO","EVENTO","FESTA","OSPITI","ASSENZA"];
+  const CAL_TYPES=["SCADENZA","TODO","COMPLEANNO","ANNIVERSARIO","EVENTO","FESTA","OSPITI","ASSENZA","RIUNIONE","APPUNTAMENTO"];
   function calOpts(str){
     const o={remind:null, prio:null, delta:null, giorno:null, weekday:null};
     if(!str) return o;
@@ -2757,6 +2813,9 @@ const Parse = (function(){
       else if(m=tok.match(/^WEEKDAY:(MON|TUE|WED|THU|FRI|SAT|SUN)$/i)) o.weekday=m[1].toUpperCase();
       else if(m=tok.match(/^([+-]\d+)$/)) o.delta=parseInt(m[1],10);
       else if(m=tok.match(/^PASTO:(pranzo|cena|entrambi)$/i)) o.pasto=m[1].toLowerCase();
+      else if(m=tok.match(/^ORA:(\d{1,2}:\d{2})$/i)) o.ora=m[1].padStart(5,"0");
+      else if(m=tok.match(/^CHI:(fra|fla|both|entrambi)$/i)) o.chi=(/entrambi|both/i.test(m[1])?"both":m[1].toLowerCase());
+      else if(m=tok.match(/^DURATA:(\d+)$/i)) o.durata=parseInt(m[1],10);
     }));
     return o;
   }
@@ -2775,6 +2834,7 @@ const Parse = (function(){
       if(o.prio) ev.prio=o.prio;
       if(o.delta!=null) ev.deltaPersone=o.delta;
       if(o.pasto) ev.pasto=o.pasto;
+      if(o.ora) ev.ora=o.ora; if(o.chi) ev.chi=o.chi; if(o.durata) ev.durata=o.durata;
       if(/^RRULE:/i.test(first)){
         const freq=(first.split(":")[1]||"").toUpperCase();
         if(!["ANNUALE","MENSILE","SETTIMANALE"].includes(freq)){ errors.push({line:i+1, raw:line, msg:"Frequenza RRULE non valida: "+freq}); return; }
@@ -2785,7 +2845,7 @@ const Parse = (function(){
         if(!/^\d{4}-\d{2}-\d{2}$/.test(first)){ errors.push({line:i+1, raw:line, msg:"Data non valida (usa YYYY-MM-DD): "+first}); return; }
         ev.date=first;
       }
-      if(tipo==="TODO") todos.push({titolo, data:ev.date||null, prio:o.prio||"media", note:note||""});
+      if(tipo==="TODO") todos.push({titolo, data:ev.date||null, ora:o.ora||null, chi:o.chi||"both", prio:o.prio||"media", note:note||""});
       else events.push(ev);
     });
     return { events, todos, errors };
@@ -2987,6 +3047,15 @@ function renderSettings(){
           <input type="number" id="set-urgency" min="1" max="60" value="${s.urgencyDays}">
           <p class="help">Entro N giorni → <span style="color:var(--u-yellow)">giallo</span>,
             entro 3 → <span style="color:var(--u-orange)">arancione</span>, oggi → <span style="color:var(--u-red)">rosso</span>.</p>
+        </div>
+      </div>
+
+      <!-- PERSONE (FRA / FLA) -->
+      <div class="set-group">
+        <h3>Chi siamo</h3>
+        <p class="help mb-3">Le due persone degli impegni e dei to-do. Sigla, nome e colore: compaiono come etichetta su ogni impegno.</p>
+        <div class="field-row">
+          ${peopleCfg().map((px,i)=>`<div class="field"><label>Persona ${i+1}</label><div class="flex gap-2"><input type="text" data-p-sigla="${i}" value="${escapeAttr(px.sigla)}" maxlength="4" style="width:70px" aria-label="Sigla"><input type="text" data-p-nome="${i}" value="${escapeAttr(px.nome)}" placeholder="Nome" aria-label="Nome"><input type="color" data-p-col="${i}" value="${escapeAttr(px.colore)}" style="width:56px;padding:2px" aria-label="Colore"></div></div>`).join("")}
         </div>
       </div>
 
@@ -3196,6 +3265,14 @@ create policy "anon full access" on sync_store
     setSetting("notificationsEnabled", e.target.checked);
   });
 
+  // ---- persone ----
+  el.querySelectorAll("[data-p-sigla],[data-p-nome],[data-p-col]").forEach(inp=>inp.addEventListener("change",()=>{
+    Store.update(db=>{ const arr=db.settings.people=peopleCfg().map(x=>({...x}));
+      el.querySelectorAll("[data-p-sigla]").forEach(x=>{ arr[+x.dataset.pSigla].sigla=(x.value.trim()||arr[+x.dataset.pSigla].sigla).toUpperCase().slice(0,4); });
+      el.querySelectorAll("[data-p-nome]").forEach(x=>{ arr[+x.dataset.pNome].nome=x.value.trim()||arr[+x.dataset.pNome].nome; });
+      el.querySelectorAll("[data-p-col]").forEach(x=>{ arr[+x.dataset.pCol].colore=x.value; }); });
+    Toast.show("Persone aggiornate","ok");
+  }));
   // ---- lista base ----
   renderBaseList(el);
   // ---- supermercati ----
@@ -3263,10 +3340,10 @@ function renderSupList(el){
   const draw=()=>{
     const sups=Supermercati.all(), deps=Store.get().settings.departments||[];
     box.innerHTML=sups.map(x=>`<details class="card sup-card" data-sup="${x.id}" style="padding:12px 16px;margin-bottom:8px">
-      <summary class="row" style="cursor:pointer;gap:10px"><span class="sup-emoji">${x.emoji||'🏬'}</span><strong>${escapeHtml(x.nome)}</strong><span class="text-xs text-mute">${x.sezioni.length} sezioni</span><button type="button" class="btn btn-ghost si-del" data-del style="margin-left:auto" aria-label="Elimina">✕</button></summary>
+      <summary class="row" style="cursor:pointer;gap:10px">${supDotHTML(x,30)}<strong>${escapeHtml(x.nome)}</strong><span class="text-xs text-mute">${x.sezioni.length} sezioni</span><button type="button" class="btn btn-ghost si-del" data-del style="margin-left:auto" aria-label="Elimina">✕</button></summary>
       <div class="field-row mt-3">
         <div class="field"><label>Nome</label><input type="text" data-f="nome" value="${escapeAttr(x.nome)}"></div>
-        <div class="field"><label>Icona (emoji) e colore</label><div class="flex gap-2"><input type="text" data-f="emoji" value="${escapeAttr(x.emoji||'')}" style="width:70px" maxlength="4"><input type="color" data-f="colore" value="${escapeAttr(x.colore||'#888888')}" style="width:56px;padding:2px"></div></div>
+        <div class="field"><label>Logo</label><div class="flex gap-2 items-center">${supDotHTML(x,40)}<button type="button" class="btn btn-sm" data-logo>📷 Carica logo…</button>${x.logo?`<button type="button" class="btn btn-ghost btn-sm" data-logo-del>Togli</button>`:''}<input type="text" data-f="emoji" value="${escapeAttr(x.emoji||'')}" style="width:60px" maxlength="4" title="Emoji di riserva"><input type="color" data-f="colore" value="${escapeAttr(x.colore||'#888888')}" style="width:48px;padding:2px" title="Colore di riserva"></div></div>
       </div>
       <div class="field"><label>Sezioni del negozio, nell'ordine del percorso (una per riga)</label><textarea data-f="sezioni" rows="6">${escapeHtml(x.sezioni.join("\n"))}</textarea></div>
       <label class="mb-2">I miei reparti → sezione</label>
@@ -3276,6 +3353,12 @@ function renderSupList(el){
     box.querySelectorAll(".sup-card").forEach(card=>{
       const id=card.dataset.sup;
       card.querySelector("[data-del]").addEventListener("click", async e=>{ e.preventDefault(); e.stopPropagation(); const ok=await Modal.confirm({title:"Elimina supermercato", message:"Eliminare questo supermercato?", confirmLabel:"Elimina", danger:true}); if(ok){ Supermercati.remove(id); draw(); } });
+      card.querySelector("[data-logo]").addEventListener("click",()=>{
+        const inp=document.createElement("input"); inp.type="file"; inp.accept="image/*";
+        inp.addEventListener("change",()=>{ const f=inp.files[0]; if(!f) return; const rd=new FileReader(); rd.onload=()=>{ const img=new Image(); img.onload=()=>{ const c=document.createElement("canvas"); c.width=c.height=128; const g=c.getContext("2d"); const k=Math.min(128/img.width,128/img.height); const w=img.width*k, h=img.height*k; g.drawImage(img,(128-w)/2,(128-h)/2,w,h); const x=JSON.parse(JSON.stringify(Supermercati.byId(id))); x.logo=c.toDataURL("image/png"); Supermercati.save(x); draw(); Toast.show("Logo caricato","ok"); }; img.src=rd.result; }; rd.readAsDataURL(f); });
+        inp.click();
+      });
+      const ld=card.querySelector("[data-logo-del]"); if(ld) ld.addEventListener("click",()=>{ const x=JSON.parse(JSON.stringify(Supermercati.byId(id))); delete x.logo; Supermercati.save(x); draw(); });
       card.querySelector("[data-save]").addEventListener("click",()=>{
         const x=JSON.parse(JSON.stringify(Supermercati.byId(id)));
         x.nome=card.querySelector('[data-f="nome"]').value.trim()||x.nome; x.emoji=card.querySelector('[data-f="emoji"]').value.trim(); x.colore=card.querySelector('[data-f="colore"]').value;
@@ -3373,6 +3456,29 @@ async function doReset(){
 --------------------------------------------------------------------------- */
 let plannerMonday = DateUtils.getMonday(new Date());
 
+/* ---- Di chi è l'impegno: FRA / FLA / entrambi ---- */
+function peopleCfg(){ const p=(Store.get().settings.people||[]); return p.length>=2?p:[{id:"fra",sigla:"FRA",nome:"Francesco",colore:"#2563eb"},{id:"fla",sigla:"FLA",nome:"Flavia",colore:"#d6216f"}]; }
+function chiChipHTML(chi, small){
+  const [a,b]=peopleCfg(); chi=chi||"both";
+  if(chi==="both") return `<span class="chi-chip both ${small?'sm':''}" style="--c1:${a.colore};--c2:${b.colore}" title="${escapeAttr(a.nome)} e ${escapeAttr(b.nome)}">${a.sigla}+${b.sigla}</span>`;
+  const px=chi===a.id?a:b;
+  return `<span class="chi-chip ${small?'sm':''}" style="--c1:${px.colore};--c2:${px.colore}" title="${escapeAttr(px.nome)}">${px.sigla}</span>`;
+}
+function chiPickerHTML(id, chi){
+  const [a,b]=peopleCfg(); chi=chi||"both";
+  return `<div class="chi-pick" id="${id}" role="group" aria-label="Di chi è">
+    <button type="button" data-chi="${a.id}" aria-pressed="${chi===a.id}" style="--c1:${a.colore};--c2:${a.colore}">${a.sigla}</button>
+    <button type="button" data-chi="${b.id}" aria-pressed="${chi===b.id}" style="--c1:${b.colore};--c2:${b.colore}">${b.sigla}</button>
+    <button type="button" data-chi="both" aria-pressed="${chi==="both"}" style="--c1:${a.colore};--c2:${b.colore}">${a.sigla}+${b.sigla}</button>
+  </div>`;
+}
+function wireChiPicker(root, id){
+  const box=root.querySelector("#"+id); if(!box) return ()=>"both";
+  box.querySelectorAll("[data-chi]").forEach(bt=>bt.addEventListener("click",()=>{ box.querySelectorAll("[data-chi]").forEach(x=>x.setAttribute("aria-pressed", x===bt)); }));
+  return ()=>{ const on=box.querySelector('[aria-pressed="true"]'); return on?on.dataset.chi:"both"; };
+}
+function oraFmt(o){ return o?`<span class="ora">${escapeHtml(o)}</span>`:""; }
+
 /* ---- telefono? (schermo stretto: layout agenda) ---- */
 function isPhone(){ return window.matchMedia && window.matchMedia("(max-width: 700px)").matches; }
 
@@ -3404,7 +3510,7 @@ function upcomingItems(daysAhead){
   Events.all().forEach(e=>{
     const d=e.date?DateUtils.parseYmd(e.date):Calendar.nextOccurrence(e); if(!d) return;
     const diff=DateUtils.diffDays(t,d);
-    if(diff>=0 && diff<=daysAhead) out.push({kind:e.type, titolo:e.titolo, date:d, diff});
+    if(diff>=0 && diff<=daysAhead) out.push({kind:e.type, titolo:(e.ora?e.ora+" ":"")+e.titolo, date:d, diff});
   });
   Todos.all().forEach(td=>{
     if(td.done||!td.data) return;
@@ -3488,12 +3594,20 @@ function buildImpegniCell(weekKey, ds, compact){
     const row=document.createElement("button"); row.type="button"; row.className="imp-row";
     const dp=(typeof e.deltaPersone==="number" && e.deltaPersone!==0) ? e.deltaPersone : 0;
     const tag=dp ? `<span class="chip ${dp>0?'chip-accent':'chip-danger'}">${e.pasto&&e.pasto!=="entrambi"?e.pasto+" ":""}${dp>0?"+":""}${dp}</span>` : "";
-    row.innerHTML=`<span class="imp-dot ${dp>0?'plus':dp<0?'minus':''}"></span><span class="imp-title" title="${escapeAttr(e.titolo)}">${escapeHtml(e.titolo)}</span>${tag}`;
+    row.innerHTML=`${chiChipHTML(e.chi,true)}${e.ora?`<span class="imp-ora">${escapeHtml(e.ora)}</span>`:`<span class="imp-dot ${dp>0?'plus':dp<0?'minus':''}"></span>`}<span class="imp-title" title="${escapeAttr(e.titolo)}">${escapeHtml(e.titolo)}</span>${tag}`;
     row.addEventListener("click",()=>openEventEditor(e, null, {onSaved:()=>Router.go("planner")}));
     list.appendChild(row);
   });
+  Todos.all().filter(td=>td.data===ds && !td.done).forEach(td=>{
+    const row=document.createElement("button"); row.type="button"; row.className="imp-row imp-todo";
+    row.innerHTML=`${chiChipHTML(td.chi,true)}${td.ora?`<span class="imp-ora">${escapeHtml(td.ora)}</span>`:`<span class="imp-dot todo"></span>`}<span class="imp-title" title="${escapeAttr(td.titolo)}">${escapeHtml(td.titolo)}</span>`;
+    row.title="To-do · tocca per modificare";
+    row.addEventListener("click",()=>openTodoEditor(td));
+    list.appendChild(row);
+  });
   const add=document.createElement("button"); add.type="button"; add.className="imp-add"; add.textContent="+ Impegno";
-  add.addEventListener("click",()=>openEventEditor(null, "EVENTO", {date:ds, onSaved:()=>Router.go("planner")}));
+  add.addEventListener("click",()=>openEventEditor(null, "RIUNIONE", {date:ds, onSaved:()=>Router.go("planner")}));
+  [...list.querySelectorAll(".imp-row")].sort((a,b)=>{ const oa=a.querySelector(".imp-ora")?.textContent||"99", ob=b.querySelector(".imp-ora")?.textContent||"99"; return oa<ob?-1:oa>ob?1:0; }).forEach(r=>list.appendChild(r));
   wrap.appendChild(list);
   if(!compact){
     list.appendChild(add);
@@ -4199,8 +4313,19 @@ function attachAutocomplete(input, opts){
       it_el.addEventListener("mousedown",e=>{ e.preventDefault(); choose(i); });
       list.appendChild(it_el);
     });
-    wrap.appendChild(list);
+    list.style.position="fixed"; list.style.zIndex="300"; list.style.left="0"; list.style.top="0";
+    document.body.appendChild(list); place();
   }
+  function place(){
+    if(!list) return;
+    const r=input.getBoundingClientRect(); const vh=window.innerHeight;
+    const below=vh-r.bottom-12, above=r.top-12;
+    const h=Math.min(list.scrollHeight, 280, Math.max(below, above));
+    list.style.width=r.width+"px"; list.style.left=r.left+"px"; list.style.maxHeight=h+"px";
+    if(below>=Math.min(list.scrollHeight,200) || below>=above){ list.style.top=(r.bottom+4)+"px"; }
+    else { list.style.top=(r.top-4-h)+"px"; }
+  }
+  window.addEventListener("resize", place); window.addEventListener("scroll", place, true);
   function choose(i){
     const it=items[i]; if(!it) return; close();
     if(it.type==="recipe") opts.onSelect(it.r); else opts.onCreate(it.text);
@@ -4216,7 +4341,8 @@ function attachAutocomplete(input, opts){
     else if(e.key==="Enter" && active>=0){ e.preventDefault(); choose(active); }
     else if(e.key==="Escape"){ close(); }
   });
-  document.addEventListener("mousedown",e=>{ if(list && !wrap.contains(e.target)) close(); }, true);
+  document.addEventListener("mousedown",e=>{ if(list && !wrap.contains(e.target) && !list.contains(e.target)) close(); }, true);
+  input.addEventListener("blur",()=>setTimeout(close,150));
 }
 
 /* ---------------------------------------------------------------------------
@@ -4328,12 +4454,18 @@ function mountShoppingList(container, listId, opts){
   return { draw };
 }
 
+/* Bollino di un supermercato: logo vero se c'è, altrimenti emoji su colore */
+function supDotHTML(sup, size){
+  size=size||26;
+  if(!sup) return `<span class="sup-dot" style="width:${size}px;height:${size}px">🏠</span>`;
+  if(sup.logo) return `<img class="sup-logo-img" src="${sup.logo}" alt="" width="${size}" height="${size}" style="width:${size}px;height:${size}px">`;
+  return `<span class="sup-dot" style="--sup:${escapeAttr(sup.colore||'#888')};width:${size}px;height:${size}px">${sup.emoji||'🏬'}</span>`;
+}
 /* Iconcina "ordine dei reparti": I miei reparti (= lista base) oppure un supermercato */
 function supPickerHTML(small){
   const st=Store.get().settings, cur=st.supermercatoAttivo?Supermercati.byId(st.supermercatoAttivo):null;
-  const emoji=cur?(cur.emoji||"🏬"):"🏠", col=cur?(cur.colore||"#888"):"";
   const label=cur?cur.nome:"I miei reparti";
-  return `<button type="button" class="btn ${small?'btn-icon btn-sm':'btn-sm'} sup-btn" data-sup-pick title="Ordine della lista: ${escapeAttr(label)} · tocca per cambiare" aria-label="Ordine della lista: ${escapeAttr(label)}"><span class="sup-dot" style="${col?`--sup:${escapeAttr(col)}`:''}">${emoji}</span>${small?"":`<span class="sup-lbl">${escapeHtml(label)}</span>`}</button>`;
+  return `<button type="button" class="btn ${small?'btn-icon btn-sm':'btn-sm'} sup-btn" data-sup-pick title="Ordine della lista: ${escapeAttr(label)} · tocca per cambiare" aria-label="Ordine della lista: ${escapeAttr(label)}">${supDotHTML(cur)}${small?"":`<span class="sup-lbl">${escapeHtml(label)}</span>`}</button>`;
 }
 function wireSupPicker(root, after){
   const b=root.querySelector("[data-sup-pick]"); if(!b) return;
@@ -4341,7 +4473,7 @@ function wireSupPicker(root, after){
     const cur=Store.get().settings.supermercatoAttivo||"";
     const html=`<small>Ordina la lista per</small>
       <button data-pick="" ${!cur?'class="is-on"':''}>🏠 I miei reparti <span class="text-mute">· come la lista base</span></button>
-      ${Supermercati.all().map(x=>`<button data-pick="${x.id}" ${cur===x.id?'class="is-on"':''}><span class="sup-dot" style="--sup:${escapeAttr(x.colore||'#888')}">${x.emoji||'🏬'}</span> ${escapeHtml(x.nome)}</button>`).join("")}
+      ${Supermercati.all().map(x=>`<button data-pick="${x.id}" ${cur===x.id?'class="is-on"':''}>${supDotHTML(x,24)} ${escapeHtml(x.nome)}</button>`).join("")}
       <div class="sep"></div><button data-pick-settings>⚙️ Gestisci supermercati…</button>`;
     openPopover(b, html, (pop, close)=>{
       pop.querySelectorAll("[data-pick]").forEach(x=>x.addEventListener("click",()=>{ close(); Supermercati.setActive(x.dataset.pick); if(after) after(); }));
@@ -4398,15 +4530,15 @@ function openBaseCheck(onDone){
   const reps=[...order.filter(r=>groups[r]), ...Object.keys(groups).filter(r=>!order.includes(r)).sort()];
   const l=Shopping.active();
   const body=`
-    <p class="text-sm text-mute mb-2">${l?`Lista attiva: <strong>${escapeHtml(l.name)}</strong>.`:"Non c'è una lista attiva: confermando ne viene creata una."} Spunta ciò che ti serve; le voci già in lista sono già spuntate.</p>
+    <p class="text-sm text-mute mb-2">${l?`Lista attiva: <strong>${escapeHtml(l.name)}</strong>.`:"Non c'è una lista attiva: confermando ne viene creata una."} Spunta ciò che ti serve; le voci già in lista sono già spuntate. Nella casella a destra puoi scrivere la quantità: <code>2</code>, <code>500 g</code>, <code>3 conf</code>, anche <code>200 g 2 conf</code>.</p>
     <div class="flex gap-2 mb-2"><button class="btn btn-sm" data-all>Tutte</button><button class="btn btn-sm" data-none>Nessuna</button><span class="text-xs text-mute" style="align-self:center" id="bc-count"></span></div>
     <div class="base-check">
       ${reps.map(rep=>`<div class="rep-head sticky">${escapeHtml(rep)}</div>`+groups[rep].map(f=>`
         <label class="bc-row ${f.locked?'locked':''}">
           <input type="checkbox" data-name="${escapeAttr(f.nome)}" ${f.inList?'checked':''} ${f.locked?'disabled':''}>
           <span class="bc-name">${escapeHtml(f.nome)}</span>
-          ${f.qty!=null?`<span class="text-mute text-xs">${Shopping.fmtQty(f.qty)} ${f.unita}</span>`:''}
           ${f.locked?`<span class="chip chip-accent">da ricetta</span>`:''}
+          <input type="text" class="bc-qty" data-qty-for="${escapeAttr(f.nome)}" data-initial="${escapeAttr(f.cur)}" value="${escapeAttr(f.cur)}" placeholder="${f.qty!=null?escapeAttr(Shopping.fmtQty(f.qty)+' '+f.unita):'q.tà / conf'}" aria-label="Quantità per ${escapeAttr(f.nome)}" inputmode="text">
         </label>`).join("")).join("")}
     </div>`;
   Modal.open({ title:"Check lista base", size:"lg", bodyHTML:body,
@@ -4417,8 +4549,10 @@ function openBaseCheck(onDone){
       boxes.forEach(b=>b.addEventListener("change",count)); count();
       dialog.querySelector("[data-all]").addEventListener("click",()=>{ boxes.forEach(b=>{ if(!b.disabled) b.checked=true; }); count(); });
       dialog.querySelector("[data-none]").addEventListener("click",()=>{ boxes.forEach(b=>{ if(!b.disabled) b.checked=false; }); count(); });
+      // scrivere una quantità spunta la voce da sola
+      dialog.querySelectorAll(".bc-qty").forEach(inp=>{ inp.addEventListener("click",e=>e.preventDefault()); inp.addEventListener("input",()=>{ const cb=boxes.find(b=>b.dataset.name===inp.dataset.qtyFor); if(cb && !cb.disabled && inp.value.trim()){ cb.checked=true; count(); } }); });
       dialog.querySelector("[data-ok]").addEventListener("click",()=>{
-        const sel=boxes.filter(b=>b.checked).map(b=>b.dataset.name);
+        const sel=boxes.filter(b=>b.checked).map(b=>{ const q=dialog.querySelector(`.bc-qty[data-qty-for="${CSS.escape(b.dataset.name)}"]`); return {nome:b.dataset.name, qtyText:q?q.value.trim():"", initial:q?q.dataset.initial:""}; });
         const r=Shopping.setBase(sel);
         close(); Toast.show(`Lista base: ${r.added} aggiunte${r.removed?`, ${r.removed} tolte`:""}`,"ok");
         if(onDone) onDone();
@@ -4625,9 +4759,9 @@ function renderChecklist(){
   const el=document.createElement("div"); el.className="view";
   el.innerHTML=`
     <div class="view-head">
-      <h1>Checklist</h1>
-      <div class="seg" role="tablist" aria-label="Sezioni checklist">
-        <button role="tab" data-tab="todo" aria-selected="${checklistTab==='todo'}">✅ To-Do</button>
+      <h1>Impegni</h1>
+      <div class="seg" role="tablist" aria-label="Sezioni impegni">
+        <button role="tab" data-tab="todo" aria-selected="${checklistTab==='todo'}">📋 Agenda</button>
         <button role="tab" data-tab="scadenze" aria-selected="${checklistTab==='scadenze'}">⏰ Scadenze</button>
         <button role="tab" data-tab="ricorrenze" aria-selected="${checklistTab==='ricorrenze'}">🎂 Ricorrenze</button>
       </div>
@@ -4649,21 +4783,39 @@ function renderTodoTab(body){
       <div class="seg" role="group" aria-label="Filtro to-do">
         ${["oggi","settimana","tutte"].map(f=>`<button data-f="${f}" aria-pressed="${todoFilter===f}">${labels[f]}</button>`).join("")}
       </div>
-      <button class="btn btn-primary btn-sm" id="td-new" style="margin-left:auto">+ Nuovo to-do</button>
+      <div class="flex gap-2" style="margin-left:auto">
+        <button class="btn btn-sm" id="ev-new2">+ Impegno</button>
+        <button class="btn btn-primary btn-sm" id="td-new">+ To-do</button>
+      </div>
     </div>
+    <p class="help mb-2">To-do e impegni insieme, in ordine di data e ora. Riunioni e appuntamenti con il loro orario; i to-do con l'ora se ce l'hanno.</p>
     <div id="td-list"></div>`;
   body.querySelectorAll("[data-f]").forEach(b=>b.addEventListener("click",()=>{ todoFilter=b.dataset.f; renderTodoTab(body); }));
   body.querySelector("#td-new").addEventListener("click",()=>openTodoEditor(null));
+  body.querySelector("#ev-new2").addEventListener("click",()=>openEventEditor(null,"RIUNIONE"));
 
   const list=body.querySelector("#td-list");
   const t=DateUtils.today();
-  let items=Todos.all().slice();
-  if(todoFilter==="oggi") items=items.filter(x=>x.data && DateUtils.diffDays(t,x.data)<=0);
-  else if(todoFilter==="settimana") items=items.filter(x=>x.data && DateUtils.diffDays(t,x.data)<=6);
-  items.sort((a,b)=>(a.done-b.done) || (dateSort(a.data)-dateSort(b.data)) || prioRank(b.prio)-prioRank(a.prio));
-  if(!items.length){ list.innerHTML=`<div class="empty-state">Nessun to-do${todoFilter!=='tutte'?' in questo filtro':''}.</div>`; return; }
+  const horizon = todoFilter==="oggi"?0 : todoFilter==="settimana"?6 : 60;
+  // to-do
+  let items=Todos.all().map(td=>({kind:"todo", td, date:td.data||null, ora:td.ora||"", done:!!td.done}));
+  if(todoFilter!=="tutte") items=items.filter(x=>x.date && DateUtils.diffDays(t,x.date)<=horizon);
+  // impegni con data (riunioni, appuntamenti, eventi, scadenze…) nello stesso orizzonte; ricorrenze alla prossima occorrenza
+  Events.all().forEach(e=>{
+    const d=e.date?DateUtils.parseYmd(e.date):Calendar.nextOccurrence(e); if(!d) return;
+    const diff=DateUtils.diffDays(t,d);
+    if(diff<0 && todoFilter!=="tutte") return;
+    if(diff>horizon) return;
+    items.push({kind:"event", e, date:DateUtils.ymd(d), ora:e.ora||"", done:false});
+  });
+  items.sort((a,b)=>(a.done-b.done) || (dateSort(a.date)-dateSort(b.date)) || ((a.ora||"99")<(b.ora||"99")?-1:(a.ora||"99")>(b.ora||"99")?1:0));
+  if(!items.length){ list.innerHTML=`<div class="empty-state">Niente in agenda${todoFilter!=='tutte'?' in questo periodo':''}.</div>`; return; }
   list.innerHTML="";
-  items.forEach(td=>list.appendChild(todoRow(td)));
+  let lastDay=null;
+  items.forEach(x=>{
+    if(x.date!==lastDay){ lastDay=x.date; const h=document.createElement("div"); h.className="ag-dayhead"; h.textContent=x.date?`${dayName(DateUtils.parseYmd(x.date))} ${DateUtils.fmtLong(DateUtils.parseYmd(x.date))}`:"Senza data"; list.appendChild(h); }
+    list.appendChild(x.kind==="todo"?todoRow(x.td):eventRow(x.e, DateUtils.parseYmd(x.date), true));
+  });
 }
 function dateSort(d){ return d?DateUtils.parseYmd(d).getTime():8.64e15; }
 function prioRank(p){ return {alta:3, media:2, bassa:1}[p]||0; }
@@ -4675,8 +4827,9 @@ function todoRow(td){
   row.innerHTML=`
     <input type="checkbox" class="cl-check" ${td.done?'checked':''} aria-label="Completato: ${escapeAttr(td.titolo)}">
     <div class="cl-main">
-      <div class="cl-title truncate" title="${escapeAttr(td.titolo)}">${escapeHtml(td.titolo)}</div>
+      <div class="cl-title truncate" title="${escapeAttr(td.titolo)}">${oraFmt(td.ora)}${chiChipHTML(td.chi,true)} ${escapeHtml(td.titolo)}</div>
       <div class="cl-meta">
+        <span class="evt-type">to-do</span>
         ${td.prio?`<span class="prio ${td.prio}">${escapeHtml(td.prio)}</span>`:''}
         ${cdHtml}
         ${td.data?`<span>${DateUtils.fmtLong(DateUtils.parseYmd(td.data))}</span>`:''}
@@ -4699,26 +4852,32 @@ function todoRow(td){
 
 function openTodoEditor(td){
   const isNew=!td;
-  const v=td||{titolo:"", data:"", prio:"media", note:""};
+  const v=td||{titolo:"", data:"", ora:"", prio:"media", note:"", chi:"both"};
   Modal.open({ title:isNew?"Nuovo to-do":"Modifica to-do",
     bodyHTML:`
       <div class="field"><label for="te-tit">Titolo *</label><input id="te-tit" type="text" value="${escapeAttr(v.titolo)}" autofocus></div>
+      <div class="field"><label>Di chi è</label>${chiPickerHTML("te-chi", v.chi)}</div>
       <div class="field-row">
         <div class="field"><label for="te-data">Data (opz.)</label><input id="te-data" type="date" value="${v.data||''}"></div>
+        <div class="field"><label for="te-ora">Ora (opz.)</label><input id="te-ora" type="time" value="${v.ora||''}"></div>
+      </div>
+      <div class="field-row">
         <div class="field"><label for="te-prio">Priorità</label><select id="te-prio">
           ${["bassa","media","alta"].map(p=>`<option ${v.prio===p?'selected':''}>${p}</option>`).join("")}
         </select></div>
+        <div class="field"></div>
       </div>
       <div class="field"><label for="te-note">Note</label><textarea id="te-note" rows="2">${escapeHtml(v.note||'')}</textarea></div>
       <p id="te-err" class="help" style="color:var(--danger)" role="alert"></p>`,
     footHTML:`<button class="btn" data-close>Annulla</button><button class="btn btn-primary" data-save>Salva</button>`,
     onMount(dialog, close){
+      const getChi=wireChiPicker(dialog,"te-chi");
       dialog.querySelector("[data-save]").addEventListener("click",()=>{
         const tit=dialog.querySelector("#te-tit").value.trim();
         if(!tit){ dialog.querySelector("#te-err").textContent="Il titolo è obbligatorio."; return; }
-        const patch={titolo:tit, data:dialog.querySelector("#te-data").value||null, prio:dialog.querySelector("#te-prio").value, note:dialog.querySelector("#te-note").value.trim()};
+        const patch={titolo:tit, data:dialog.querySelector("#te-data").value||null, ora:dialog.querySelector("#te-ora").value||null, prio:dialog.querySelector("#te-prio").value, note:dialog.querySelector("#te-note").value.trim(), chi:getChi()};
         if(isNew) Todos.add(patch); else Todos.update(td.id, patch);
-        close(); Toast.show("Salvato","ok"); Router.go("checklist");
+        close(); Toast.show("Salvato","ok"); Router.go(Router.currentName()==="planner"?"planner":"checklist");
       });
     }});
 }
@@ -4726,17 +4885,17 @@ function openTodoEditor(td){
 /* ---- Scadenze & Ricorrenze (eventi) ---- */
 function renderEventTab(body, which){
   const isScad = which==="scadenze";
-  const types = isScad ? ["SCADENZA","EVENTO","FESTA"] : ["COMPLEANNO","ANNIVERSARIO"];
+  const types = isScad ? ["SCADENZA","EVENTO","FESTA","RIUNIONE","APPUNTAMENTO","OSPITI","ASSENZA"] : ["COMPLEANNO","ANNIVERSARIO"];
   body.innerHTML=`
     <div class="filterbar">
-      <span class="text-sm text-mute">${isScad?'Scadenze ed eventi datati':'Compleanni e anniversari (al prossimo occorrere)'}</span>
+      <span class="text-sm text-mute">${isScad?'Tutti gli impegni con data: riunioni, appuntamenti, scadenze, ospiti…':'Compleanni e anniversari (al prossimo occorrere)'}</span>
       <div class="flex gap-2" style="margin-left:auto">
         <button class="btn btn-sm" id="ev-ics">📅 Esporta .ics</button>
-        <button class="btn btn-primary btn-sm" id="ev-new">+ Nuov${isScad?'a scadenza':'a ricorrenza'}</button>
+        <button class="btn btn-primary btn-sm" id="ev-new">+ Nuov${isScad?'o impegno':'a ricorrenza'}</button>
       </div>
     </div>
     <div id="ev-list"></div>`;
-  body.querySelector("#ev-new").addEventListener("click",()=>openEventEditor(null, isScad?"SCADENZA":"COMPLEANNO"));
+  body.querySelector("#ev-new").addEventListener("click",()=>openEventEditor(null, isScad?"RIUNIONE":"COMPLEANNO"));
   body.querySelector("#ev-ics").addEventListener("click",()=>exportICS([...icsSelection]));
 
   const list=body.querySelector("#ev-list");
@@ -4745,7 +4904,7 @@ function renderEventTab(body, which){
     return {e, d};
   }).filter(x=>x.d);
   evs.sort((a,b)=>a.d-b.d);
-  if(!evs.length){ list.innerHTML=`<div class="empty-state">Niente qui. Aggiungi con “+ Nuov${isScad?'a scadenza':'a ricorrenza'}” o importa un calendario.txt.</div>`; return; }
+  if(!evs.length){ list.innerHTML=`<div class="empty-state">Niente qui. Aggiungi con “+ Nuov${isScad?'o impegno':'a ricorrenza'}” o importa un calendario.txt.</div>`; return; }
   list.innerHTML="";
   evs.forEach(({e,d})=>list.appendChild(eventRow(e,d,isScad)));
 }
@@ -4760,11 +4919,13 @@ function eventRow(e, d, isScad){
   row.innerHTML=`
     <input type="checkbox" class="cl-select" data-sel aria-label="Seleziona per esportazione" ${icsSelection.has(e.id)?'checked':''}>
     <div class="cl-main">
-      <div class="cl-title truncate" title="${escapeAttr(e.titolo)}"><span class="evt-type">${escapeHtml(e.type)}</span> · ${escapeHtml(e.titolo)}</div>
+      <div class="cl-title truncate" title="${escapeAttr(e.titolo)}">${oraFmt(e.ora)}${chiChipHTML(e.chi,true)} ${escapeHtml(e.titolo)}</div>
       <div class="cl-meta">
+        <span class="evt-type">${escapeHtml(({RIUNIONE:"riunione",APPUNTAMENTO:"appuntamento",EVENTO:"evento",SCADENZA:"scadenza",OSPITI:"ospiti",ASSENZA:"fuori casa",FESTA:"festa",COMPLEANNO:"compleanno",ANNIVERSARIO:"anniversario"})[e.type]||e.type.toLowerCase())}</span>
         <span class="cd ${c.level}">${c.label}</span>
         <span>${DateUtils.fmtLong(d)}</span>
-        ${e.remind?`<span>⏰ ${escapeHtml(e.remind)}</span>`:''}
+        ${e.durata?`<span>· ${e.durata<60?e.durata+" min":(e.durata/60)+" h"}</span>`:''}
+        ${e.remind?`<span>⏰ promemoria ${escapeHtml(e.remind)}</span>`:''}
         ${extra.length?`<span>· ${extra.join(" · ")}</span>`:''}
         ${e.note?`<span>· ${escapeHtml(e.note)}</span>`:''}
       </div>
@@ -4786,21 +4947,27 @@ function eventRow(e, d, isScad){
 function openEventEditor(ev, presetType, opts){
   opts=opts||{};
   const isNew=!ev;
-  const types=["SCADENZA","EVENTO","OSPITI","ASSENZA","FESTA","COMPLEANNO","ANNIVERSARIO"];
+  const types=["RIUNIONE","APPUNTAMENTO","EVENTO","SCADENZA","OSPITI","ASSENZA","FESTA","COMPLEANNO","ANNIVERSARIO"];
+  const TYPE_LABEL={RIUNIONE:"Riunione",APPUNTAMENTO:"Appuntamento",EVENTO:"Evento",SCADENZA:"Scadenza da pagare",OSPITI:"Ospiti a tavola",ASSENZA:"Fuori casa",FESTA:"Festa",COMPLEANNO:"Compleanno",ANNIVERSARIO:"Anniversario"};
   let dataVal=opts.date||"";
   if(ev){ dataVal = ev.date || (ev.rrule&&ev.rrule.freq==="ANNUALE"&&ev.rrule.day ? `${DateUtils.today().getFullYear()}-${ev.rrule.day}` : ""); }
-  const v=ev||{titolo:"", type:presetType||"SCADENZA", note:"", ente:"", importo:"", remind:"", deltaPersone:0, pasto:"entrambi"};
+  const v=ev||{titolo:"", type:presetType||"RIUNIONE", note:"", ente:"", importo:"", remind:"", ora:"", chi:"both", deltaPersone:0, pasto:"entrambi"};
   const delta=(typeof v.deltaPersone==="number")?v.deltaPersone:0;
   const pasto=v.pasto||"entrambi";
   Modal.open({ title:isNew?"Nuovo impegno":"Modifica impegno",
     bodyHTML:`
       <div class="field-row">
         <div class="field"><label for="ee-tit">Titolo *</label><input id="ee-tit" type="text" value="${escapeAttr(v.titolo)}" autofocus></div>
-        <div class="field"><label for="ee-type">Tipo</label><select id="ee-type">${types.map(t=>`<option ${v.type===t?'selected':''}>${t}</option>`).join("")}</select></div>
+        <div class="field"><label for="ee-type">Tipo</label><select id="ee-type">${types.map(t=>`<option value="${t}" ${v.type===t?'selected':''}>${TYPE_LABEL[t]||t}</option>`).join("")}</select></div>
       </div>
+      <div class="field"><label>Di chi è</label>${chiPickerHTML("ee-chi", v.chi)}</div>
       <div class="field-row">
         <div class="field"><label for="ee-data">Data *</label><input id="ee-data" type="date" value="${dataVal}"></div>
+        <div class="field"><label for="ee-ora">Orario dell'impegno</label><input id="ee-ora" type="time" value="${v.ora||''}"></div>
+      </div>
+      <div class="field-row">
         <div class="field"><label for="ee-remind">Promemoria (opz.)</label><input id="ee-remind" type="time" value="${v.remind||''}"></div>
+        <div class="field"><label for="ee-durata">Durata (opz.)</label><select id="ee-durata"><option value="">—</option>${[15,30,45,60,90,120,180,240].map(m=>`<option value="${m}" ${v.durata==m?'selected':''}>${m<60?m+" min":(m/60)+" h"}</option>`).join("")}</select></div>
       </div>
       <p class="help" style="margin-top:-8px">Per Compleanno/Anniversario si usa mese-giorno, ripetuto ogni anno.</p>
       <div class="field-row">
@@ -4819,6 +4986,7 @@ function openEventEditor(ev, presetType, opts){
       <p id="ee-err" class="help" style="color:var(--danger)" role="alert"></p>`,
     footHTML:`${isNew?"":'<button class="btn btn-danger" data-del style="margin-right:auto">Elimina</button>'}<button class="btn" data-close>Annulla</button><button class="btn btn-primary" data-save>Salva</button>`,
     onMount(dialog, close){
+      const getChi=wireChiPicker(dialog,"ee-chi");
       const refreshList=(dateStr)=>{ if(!dateStr) return; const wk=DateUtils.isoWeekKey(DateUtils.parseYmd(dateStr)); let n=0; ["pranzo","cena"].forEach(w=>{ if(Shopping.mealInList(dateStr,w)){ Shopping.addMeal(wk, dateStr, w); n++; } }); if(n) Toast.show("Lista della spesa aggiornata","ok"); };
       const done=(dateStr)=>{ close(); Toast.show("Salvato","ok"); refreshList(dateStr); if(opts.onSaved) opts.onSaved(); else Router.go("checklist"); };
       const del=dialog.querySelector("[data-del]");
@@ -4839,6 +5007,9 @@ function openEventEditor(ev, presetType, opts){
           ente:dialog.querySelector("#ee-ente").value.trim()||undefined,
           importo: imp!==""?parseFloat(imp):undefined,
           remind:dialog.querySelector("#ee-remind").value||undefined,
+          ora:dialog.querySelector("#ee-ora").value||undefined,
+          durata:parseInt(dialog.querySelector("#ee-durata").value,10)||undefined,
+          chi:getChi(),
           deltaPersone: (isNaN(dp)||dp===0)?undefined:Math.max(-20,Math.min(20,dp)),
           pasto: dialog.querySelector("#ee-pasto").value };
         if(type==="COMPLEANNO"||type==="ANNIVERSARIO"){
@@ -4881,7 +5052,8 @@ function buildICS(events){
     const d=e.date?DateUtils.parseYmd(e.date):Calendar.nextOccurrence(e); if(!d) return;
     out+="BEGIN:VEVENT\r\n";
     out+=`UID:${e.id}@planner-weekly\r\n`;
-    out+=`DTSTART;VALUE=DATE:${dt(d)}\r\n`;
+    if(e.ora){ const [hh,mm]=e.ora.split(":"); out+=`DTSTART:${dt(d)}T${hh}${mm}00\r\n`; if(e.durata){ const end=new Date(d.getTime()); end.setHours(parseInt(hh,10), parseInt(mm,10)+e.durata); out+=`DTEND:${dt(end)}T${DateUtils.pad(end.getHours())}${DateUtils.pad(end.getMinutes())}00\r\n`; } }
+    else out+=`DTSTART;VALUE=DATE:${dt(d)}\r\n`;
     out+=`SUMMARY:${esc(e.titolo)}\r\n`;
     if(e.note) out+=`DESCRIPTION:${esc(e.note)}\r\n`;
     if(e.rrule){ const fr={ANNUALE:"YEARLY",MENSILE:"MONTHLY",SETTIMANALE:"WEEKLY"}[e.rrule.freq]; if(fr) out+=`RRULE:FREQ=${fr}\r\n`; }
@@ -5199,7 +5371,7 @@ function escapeAttr(str){ return escapeHtml(str); }
      una memoria separata da Safari: il reset del browser non le tocca.
    - Mostra un suggerimento di installazione una sola volta su iPad/iPhone.
 --------------------------------------------------------------------------- */
-const APP_VERSION = "2026-10-11.11";
+const APP_VERSION = "2026-10-12.4";
 const Pwa = (function(){
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
   const standalone = window.navigator.standalone===true || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
@@ -5334,7 +5506,7 @@ function boot(){
   if(Store.get().settings.sync && Store.get().settings.sync.enabled) setTimeout(()=>Sync.startAuto(), 400);
 }
 
-return { boot, Store, Toast, Modal, Router, Theme, Demo, applyImport, IngKey, Supermercati,
+return { boot, Store, Toast, Modal, Router, Theme, Demo, applyImport, IngKey, Supermercati, Reparti,
   Parse, Backup, Sync, Shopping, Recipes, Events, Todos, Calendar, DateUtils, Plan };
 })();
 
